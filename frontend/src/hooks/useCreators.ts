@@ -18,7 +18,8 @@ export function useCreator(id: string | null) {
 
 export function useGenerateBriefing() {
     return useMutation({
-        mutationFn: (channelId: string) => generateBriefing(channelId),
+        mutationFn: (params: { channel_id: string; campaign_context?: string }) =>
+            generateBriefing(params),
     })
 }
 

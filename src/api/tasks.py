@@ -13,27 +13,32 @@ logger = logging.getLogger(__name__)
 
 BRIEFING_PROMPT_TEMPLATE = """You are a campaign strategist writing a one-page engagement briefing.
 
-## Creator Profile
+Based on the creator's metadata and content excerpts provided below, generate a professional, concise outreach cheat sheet.
+
+## Source Data
 - **Name:** {channel_title}
 - **Subscribers:** {subscriber_count:,}
 - **Alignment Score:** {alignment_score}/100
+- **Campaign Topic:** {topic}
 
-## Key Quotes from Their Content
+### Key Quotes
 {quotes_section}
 
-## Top Aligned Content Excerpts
+### Content Excerpts
 {chunks_section}
 
 ---
 
-Write a professional, concise engagement briefing (in Markdown) that includes:
-1. **Creator Summary** — Who they are and what their content covers
-2. **Alignment Analysis** — Why they're a good fit for the campaign topic "{topic}"
-3. **Engagement Strategy** — How a brand could partner with them naturally
-4. **Talking Points** — 3-5 specific talking points for outreach
-5. **Risk Assessment** — Any concerns (polarizing content, controversy)
+## Instructions
+Write the briefing in Markdown using specifically these 6 sections:
+1. **Creator Profile** — Summary of who they are and their content niche.
+2. **Mission Relevance** — Why this creator is a high-value/natural fit for the campaign topic "{topic}".
+3. **Key Topics** — The recurring themes in their content that align with our mission.
+4. **Metrics** — Highlight their subscriber count and reach.
+5. **Example Content** — Cite specific quotes or excerpts provided above that demonstrate their alignment.
+6. **Suggested Talking Points** — 3-5 specific, natural hooks we can use for outreach.
 
-Keep it to 1 page (~500 words). Be specific, citing their actual content."""
+Keep it professional, evidence-based, and exactly under one page (~400-500 words)."""
 
 
 def generate_briefing_task(

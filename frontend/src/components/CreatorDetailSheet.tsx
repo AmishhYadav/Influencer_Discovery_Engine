@@ -12,21 +12,36 @@ export default function CreatorDetailSheet({
     const { data: creator, isLoading } = useCreator(channelId)
     const generateBriefing = useGenerateBriefing()
     const [briefingId, setBriefingId] = useState<string | null>(null)
+    const [campaignContext, setCampaignContext] = useState('')
+    const [isCopied, setIsCopied] = useState(false)
     const { data: briefing } = useBriefingPolling(briefingId)
 
     if (!channelId) return null
 
     const handleGenerate = async () => {
         try {
-            const result = await generateBriefing.mutateAsync(channelId)
+            const result = await generateBriefing.mutateAsync({
+                channel_id: channelId,
+                campaign_context: campaignContext || undefined,
+            })
             setBriefingId(result.briefing_id)
         } catch {
             // Error is displayed in the UI below
         }
     }
 
+    const handleCopy = async () => {
+        if (briefing?.content) {
+            await navigator.clipboard.writeText(briefing.content)
+            setIsCopied(true)
+            setTimeout(() => setIsCopied(false), 2000)
+        }
+    }
+
     const handleClose = () => {
         setBriefingId(null)
+        setCampaignContext('')
+        setIsCopied(false)
         onClose()
     }
 
@@ -169,31 +184,52 @@ export default function CreatorDetailSheet({
                             <SectionTitle>Engagement Briefing</SectionTitle>
 
                             {!briefingId && !generateBriefing.isPending && (
-                                <button
-                                    onClick={handleGenerate}
-                                    style={{
-                                        width: '100%',
-                                        padding: '12px 20px',
-                                        borderRadius: 8,
-                                        border: 'none',
-                                        background: 'linear-gradient(135deg, hsl(263.4 70% 50.4%), hsl(280 70% 55%))',
-                                        color: 'white',
-                                        fontWeight: 600,
-                                        fontSize: 14,
-                                        cursor: 'pointer',
-                                        transition: 'transform 100ms, box-shadow 200ms',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(-1px)'
-                                        e.currentTarget.style.boxShadow = '0 4px 20px hsl(263.4 70% 50.4% / 0.3)'
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.transform = 'translateY(0)'
-                                        e.currentTarget.style.boxShadow = 'none'
-                                    }}
-                                >
-                                    ✨ Generate Briefing
-                                </button>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                    <textarea
+                                        placeholder="Campaign context (optional)… e.g., 'Sustainability campaign for Oatly'"
+                                        value={campaignContext}
+                                        onChange={(e) => setCampaignContext(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            minHeight: 72,
+                                            padding: 12,
+                                            borderRadius: 8,
+                                            border: '1px solid hsl(215 27.9% 16.9%)',
+                                            background: 'hsl(215 27.9% 6%)',
+                                            color: 'hsl(210 20% 98%)',
+                                            fontSize: 13,
+                                            lineHeight: '1.5',
+                                            outline: 'none',
+                                            resize: 'vertical',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                    <button
+                                        onClick={handleGenerate}
+                                        style={{
+                                            width: '100%',
+                                            padding: '12px 20px',
+                                            borderRadius: 8,
+                                            border: 'none',
+                                            background: 'linear-gradient(135deg, hsl(263.4 70% 50.4%), hsl(280 70% 55%))',
+                                            color: 'white',
+                                            fontWeight: 600,
+                                            fontSize: 14,
+                                            cursor: 'pointer',
+                                            transition: 'transform 100ms, box-shadow 200ms',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(-1px)'
+                                            e.currentTarget.style.boxShadow = '0 4px 20px hsl(263.4 70% 50.4% / 0.3)'
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.transform = 'translateY(0)'
+                                            e.currentTarget.style.boxShadow = 'none'
+                                        }}
+                                    >
+                                        ✨ Generate Briefing
+                                    </button>
+                                </div>
                             )}
 
                             {generateBriefing.isPending && (
@@ -251,19 +287,42 @@ export default function CreatorDetailSheet({
                             )}
 
                             {briefing?.status === 'completed' && briefing.content && (
-                                <div
-                                    style={{
-                                        padding: 20,
-                                        borderRadius: 8,
-                                        background: 'hsl(215 27.9% 8%)',
-                                        border: '1px solid hsl(215 27.9% 16.9%)',
-                                        fontSize: 13,
-                                        lineHeight: 1.7,
-                                        marginTop: 8,
-                                    }}
-                                    className="briefing-markdown"
-                                >
-                                    <Markdown>{briefing.content}</Markdown>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+                                    <div
+                                        style={{
+                                            padding: 20,
+                                            borderRadius: 8,
+                                            background: 'hsl(215 27.9% 8%)',
+                                            border: '1px solid hsl(215 27.9% 16.9%)',
+                                            fontSize: 13,
+                                            lineHeight: 1.7,
+                                        }}
+                                        className="briefing-markdown"
+                                    >
+                                        <Markdown>{briefing.content}</Markdown>
+                                    </div>
+                                    <button
+                                        onClick={handleCopy}
+                                        style={{
+                                            padding: '10px 16px',
+                                            borderRadius: 8,
+                                            border: `1px solid ${isCopied ? 'hsl(142 76% 36% / 0.3)' : 'hsl(215 27.9% 16.9%)'}`,
+                                            background: isCopied
+                                                ? 'hsl(142 76% 36% / 0.12)'
+                                                : 'hsl(263.4 70% 50.4% / 0.08)',
+                                            color: isCopied ? 'hsl(142 76% 56%)' : 'hsl(263.4 70% 70%)',
+                                            fontWeight: 600,
+                                            fontSize: 13,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 8,
+                                            transition: 'all 200ms',
+                                        }}
+                                    >
+                                        {isCopied ? '✅ Copied!' : '📋 Copy to Clipboard'}
+                                    </button>
                                 </div>
                             )}
 

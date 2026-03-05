@@ -59,11 +59,14 @@ export async function fetchCreator(id: string): Promise<CreatorDetail> {
 
 // ── Briefings ────────────────────────────────────────────────────
 
-export async function generateBriefing(channelId: string): Promise<BriefingAcceptedResponse> {
+export async function generateBriefing(params: {
+    channel_id: string
+    campaign_context?: string
+}): Promise<BriefingAcceptedResponse> {
     const res = await fetch(`${API_URL}/api/briefings/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel_id: channelId }),
+        body: JSON.stringify(params),
     })
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     return res.json()
