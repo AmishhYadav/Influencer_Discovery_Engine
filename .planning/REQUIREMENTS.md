@@ -1,42 +1,53 @@
 # Requirements: Influencer Discovery Engine
 
-## Core Workflow
-1.  **Ingestion**: User inputs a YouTube channel URL or keyword search. System fetches transcripts, descriptions, tags, and audience metrics.
-2.  **Analysis**: System cleans transcripts (removing sponsor reads) and uses NLP to score content for topic alignment (e.g., plant-based health) and professional tone, penalizing explicit activism.
-3.  **Discovery**: User views a ranked list of creators in a dashboard, sortable by alignment score, audience size, and engagement.
-4.  **Briefing**: User selects a creator and clicks "Generate Briefing," which produces a bulleted cheat sheet for human outreach coordinators.
-
-## Functional Requirements
+## v1 Requirements
 
 ### Data Collection (YouTube-First)
-- [ ] Must fetch video transcripts for a given channel without relying on browser automation (e.g., via `youtube-transcript-api`).
-- [ ] Must fetch channel metadata (subscriber count, video count, engagement metrics) via YouTube Data API.
-- [ ] Must include a light text-cleaning step to strip known sponsor reads and auto-generated filler before NLP analysis.
+- [ ] **DATA-01**: System can fetch video transcripts for a given channel via `youtube-transcript-api` (no browser automation).
+- [ ] **DATA-02**: System can fetch channel metadata (subscriber count, video count, engagement metrics) via YouTube Data API.
+- [ ] **DATA-03**: System strips known sponsor reads and auto-generated filler from transcripts before analysis.
 
 ### Analysis Engine
-- [ ] Must score content for semantic alignment with target advocacy topics (e.g., sustainability, ethical food systems, plant-based health).
-- [ ] **Critical**: Must penalize polarizing, protest-oriented, or explicit activist language to surface "soft activists" and credible professionals.
-- [ ] Must extract and save representative quotes/timestamps that justify the alignment score.
+- [ ] **NLP-01**: System scores content for semantic alignment with target advocacy topics (sustainability, ethical food systems, plant-based health).
+- [ ] **NLP-02**: System penalizes polarizing, protest-oriented, or explicit activist language to surface "soft activists."
+- [ ] **NLP-03**: System extracts and saves representative quotes/timestamps that justify the alignment score.
 
 ### Core API & Database
-- [ ] Must store creators, metrics, transcripts, and alignment scores in a PostgreSQL database (utilizing `pgvector` for semantic search).
-- [ ] Must expose REST endpoints (via FastAPI) for searching, filtering, and retrieving creator profiles.
-- [ ] Must handle the asynchronous triggering of the LLM briefing generation.
+- [ ] **API-01**: System stores creators, metrics, transcripts, and alignment scores in PostgreSQL (`pgvector`).
+- [ ] **API-02**: System exposes REST endpoints for searching, filtering, and retrieving creator profiles.
+- [ ] **API-03**: System handles the asynchronous triggering of the LLM briefing generation.
 
 ### Frontend Dashboard
-- [ ] Must display a searchable, filterable list of ranked creators.
-- [ ] Must show individual creator profiles with their metrics, alignment scores, and justifying quotes.
-- [ ] Must include a prominent UI action to generate and view the outreach briefing kit.
+- [ ] **UI-01**: Dashboard displays a searchable, filterable list of ranked creators.
+- [ ] **UI-02**: Dashboard shows individual creator profiles with their metrics, alignment scores, and justifying quotes.
+- [ ] **UI-03**: Dashboard includes a prominent UI action to generate and view the outreach briefing kit.
 
 ### Outreach Briefing Generator
-- [ ] Must prompt an LLM (Sonnet or GPT-4o-mini) with the creator's profile, metrics, and top aligned quotes.
-- [ ] Must output a strictly formatted, bulleted cheat sheet containing: creator profile, mission relevance, key topics, metrics, example content, and suggested talking points.
+- [ ] **AI-01**: System prompts an LLM with the creator's profile, metrics, and top aligned quotes to generate a briefing.
+- [ ] **AI-02**: Output is strictly formatted as a bulleted cheat sheet containing: creator profile, mission relevance, key topics, metrics, example content, and suggested talking points.
 
-## Non-Functional Requirements
-- [ ] **Performance**: Dashboard queries must return in under 500ms. Ingestion and analysis can run asynchronously.
-- [ ] **Reliability**: API quotas for YouTube must be managed (e.g., heavy caching, using transcript API over search API where possible).
+## v2 Requirements (Deferred)
+- [ ] Support for ingesting content from blogs and academic papers.
+- [ ] Support for Instagram and TikTok data ingestion.
+- [ ] Webhook integrations for updating CRMs dynamically.
 
-## Out of Scope (MVP)
-- [ ] Ingesting from blogs, academic papers, Instagram, TikTok.
-- [ ] Automated email sending or full CRM capabilities.
-- [ ] Complex custom embedding models (use foundational models first).
+## Out of Scope
+- [ ] Automated email sending — Anti-goal. The system empowers human coordinators; it does not replace them.
+- [ ] Full CRM capabilities — MVP focuses on discovery, not relationship management.
+- [ ] Complex custom embedding models — Use foundational models first to avoid over-engineering.
+
+## Traceability
+- **DATA-01** → Phase 1
+- **DATA-02** → Phase 1
+- **DATA-03** → Phase 1
+- **NLP-01** → Phase 2
+- **NLP-02** → Phase 2
+- **NLP-03** → Phase 2
+- **API-01** → Phase 3
+- **API-02** → Phase 3
+- **API-03** → Phase 3
+- **UI-01** → Phase 4
+- **UI-02** → Phase 4
+- **UI-03** → Phase 4
+- **AI-01** → Phase 5
+- **AI-02** → Phase 5
