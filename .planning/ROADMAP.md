@@ -12,40 +12,40 @@
 
 ### Phase Details
 
-**Phase 1: Ingestion**
-Goal: Reliable YouTube transcript and metadata fetching
+### Phase 1: Ingestion
+**Goal:** Reliable YouTube transcript and metadata fetching
 Requirements: DATA-01, DATA-02, DATA-03
 Success criteria:
 1. Given a channel URL, system downloads transcripts for recent videos without browser automation.
 2. System fetches valid channel metadata (subscribers, views) from YouTube API.
 3. Transcripts are stripped of common sponsor reads ("NordVPN") and auto-generated filler.
 
-**Phase 2: Analysis Engine**
-Goal: NLP scoring for soft activism and topic alignment
+### Phase 2: Analysis Engine
+**Goal:** NLP scoring for soft activism and topic alignment
 Requirements: NLP-01, NLP-02, NLP-03
 Success criteria:
 1. System assigns a >0 score for content discussing plant-based health or sustainability.
 2. System heavily penalizes or flags transcripts containing explicit protest/activist language.
 3. System extracts the top 3 most aligned quotes per analyzed channel with timestamps.
 
-**Phase 3: Core Data API**
-Goal: Store and serve creator profiles and scores
+### Phase 3: Core Data API
+**Goal:** Store and serve creator profiles and scores
 Requirements: API-01, API-02, API-03
 Success criteria:
 1. Creator profiles, transcripts, and scores are successfully saved to PostgreSQL.
 2. A REST endpoint returns a list of creators sorted by alignment score.
 3. A REST endpoint can trigger the async briefing generation task.
 
-**Phase 4: Frontend Dashboard**
-Goal: UI to explore and filter ranked creators
+### Phase 4: Frontend Dashboard
+**Goal:** UI to explore and filter ranked creators
 Requirements: UI-01, UI-02, UI-03
 Success criteria:
 1. React dashboard loads a list of fetched creators.
 2. User can filter creators by minimum subscriber count and minimum alignment score.
 3. Clicking a creator shows their profile, metrics, and the top justifying quotes.
 
-**Phase 5: Briefing Generator**
-Goal: AI-powered outreach cheat sheet generation
+### Phase 5: Briefing Generator
+**Goal:** AI-powered outreach cheat sheet generation
 Requirements: AI-01, AI-02
 Success criteria:
 1. System successfully prompts the LLM with creator context and receives a response.
