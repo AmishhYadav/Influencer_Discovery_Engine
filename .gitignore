@@ -1,0 +1,42 @@
+# ── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+venv/
+.venv/
+*.db
+*.sqlite3
+
+# ── Environment ────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Testing ────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── IDE ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ── Node (frontend/) ──────────────────────────────
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.log
+npm-debug.log*
+
+# ── Misc ───────────────────────────────────────────
+*.local
+.claude/
+.planning/phases/*/tmp/
