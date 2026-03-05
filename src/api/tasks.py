@@ -1,0 +1,118 @@
+import logging
+import os
+from typing import Optional
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+from src.db.models import Channel, create_tables
+from src.db.dao import get_top_chunks, update_briefing
+from src.analysis.nlp import get_embedding, score_chunks
+
+logger = logging.getLogger(__name__)
+
+BRIEFING_PROMPT_TEMPLATE = """You are a campaign strategist writing a one-page engagement briefing.
+
+## Creator Profile
+- **Name:** {channel_title}
+- **Subscribers:** {subscriber_count:,}
+- **Alignment Score:** {alignment_score}/100
+
+## Key Quotes from Their Content
+{quotes_section}
+
+## Top Aligned Content Excerpts
+{chunks_section}
+
+---
+
+Write a professional, concise engagement briefing (in Markdown) that includes:
+1. **Creator Summary** — Who they are and what their content covers
+2. **Alignment Analysis** — Why they're a good fit for the campaign topic "{topic}"
+3. **Engagement Strategy** — How a brand could partner with them naturally
+4. **Talking Points** — 3-5 specific talking points for outreach
+5. **Risk Assessment** — Any concerns (polarizing content, controversy)
+
+Keep it to 1 page (~500 words). Be specific, citing their actual content."""
+
+
+def generate_briefing_task(
+    briefing_id: str,
+    channel_id: str,
+    db_url: str,
+    campaign_context: Optional[str] = None,
+    topic: str = "plant-based health, sustainable food systems",
+):
+    """Background task: generate an engagement briefing for a channel.
+
+    This runs asynchronously via FastAPI BackgroundTasks.
+    """
+    from openai import OpenAI
+
+    engine = create_engine(db_url, echo=False)
+    create_tables(engine)
+
+    try:
+        with Session(engine) as session:
+            channel = session.get(Channel, channel_id)
+            if channel is None:
+                update_briefing(session, briefing_id, "Channel not found", "failed")
+                session.commit()
+                return
+
+            # Get top aligned chunks
+            target_embedding = get_embedding(topic)
+            top_chunks = get_top_chunks(session, channel_id, target_embedding, limit=10)
+
+            # Build the prompt
+            quotes_section = ""
+            if channel.alignment_quotes:
+                for q in channel.alignment_quotes:
+                    quotes_section += f'- "{q.get("text", "")}" ({q.get("timestamp", "")})\n'
+            else:
+                quotes_section = "- No quotes available\n"
+
+            chunks_section = ""
+            for i, chunk in enumerate(top_chunks[:5], 1):
+                chunks_section += f"\n**Excerpt {i}:**\n> {chunk.text[:300]}...\n"
+
+            if not chunks_section:
+                chunks_section = "No aligned content excerpts available."
+
+            prompt = BRIEFING_PROMPT_TEMPLATE.format(
+                channel_title=channel.title,
+                subscriber_count=channel.subscriber_count or 0,
+                alignment_score=channel.alignment_score or 0,
+                quotes_section=quotes_section,
+                chunks_section=chunks_section,
+                topic=topic,
+            )
+
+            if campaign_context:
+                prompt += f"\n\n**Additional Campaign Context:** {campaign_context}"
+
+            # Call OpenAI
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a campaign strategist."},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.5,
+                max_tokens=1500,
+            )
+            content = response.choices[0].message.content
+
+            update_briefing(session, briefing_id, content, "completed")
+            session.commit()
+            logger.info("Briefing %s completed for channel %s", briefing_id, channel_id)
+
+    except Exception as e:
+        logger.error("Briefing generation failed: %s", e)
+        try:
+            with Session(engine) as session:
+                update_briefing(session, briefing_id, str(e), "failed")
+                session.commit()
+        except Exception:
+            logger.exception("Failed to update briefing status")

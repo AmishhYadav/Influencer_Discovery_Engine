@@ -3,7 +3,7 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from src.db.models import Channel, Video, TranscriptChunk
+from src.db.models import Channel, Video, TranscriptChunk, Briefing
 
 
 # ── Channel ──────────────────────────────────────────────────────────────
@@ -148,3 +148,33 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
     if mag_a == 0 or mag_b == 0:
         return 0.0
     return dot / (mag_a * mag_b)
+
+
+# ── Briefings ────────────────────────────────────────────────────────────
+
+def create_briefing(session: Session, channel_id: str) -> Briefing:
+    """Create a new pending briefing record."""
+    briefing = Briefing(channel_id=channel_id)
+    session.add(briefing)
+    session.flush()  # Populate the auto-generated id
+    return briefing
+
+
+def update_briefing(
+    session: Session,
+    briefing_id: str,
+    content: str,
+    status: str,
+) -> Optional[Briefing]:
+    """Update a briefing with content and status."""
+    briefing = session.get(Briefing, briefing_id)
+    if briefing is None:
+        return None
+    briefing.content = content
+    briefing.status = status
+    return briefing
+
+
+def get_briefing(session: Session, briefing_id: str) -> Optional[Briefing]:
+    """Retrieve a briefing by its ID."""
+    return session.get(Briefing, briefing_id)
