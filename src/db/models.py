@@ -99,6 +99,78 @@ class Briefing(Base):
         return f"<Briefing id={self.id!r} status={self.status!r}>"
 
 
+class Creator(Base):
+    """A platform-agnostic creator/author discovered from any source.
+
+    This is the core entity that unifies YouTube channels, blog authors,
+    social media profiles, and academic researchers into a single
+    scorable record.
+    """
+
+    __tablename__ = "creators"
+
+    id = Column(String, primary_key=True, default=lambda: uuid.uuid4().hex)
+    name = Column(String, nullable=False)
+    platform = Column(
+        String, nullable=False,
+        doc="Source platform: youtube | blog | twitter | instagram | academic",
+    )
+    platform_id = Column(
+        String, nullable=True,
+        doc="Platform-specific identifier (channel ID, URL, handle, author ID)",
+    )
+    profile_url = Column(String, nullable=True)
+    bio = Column(Text, default="")
+    follower_count = Column(Integer, default=0)
+
+    # ── Scoring dimensions ───────────────────────────────────────────
+    credibility_score = Column(Float, nullable=True, doc="0-100 credibility score")
+    engagement_score = Column(Float, nullable=True, doc="0-100 engagement score")
+    reach_score = Column(Float, nullable=True, doc="0-100 audience reach score")
+    alignment_score = Column(Float, nullable=True, doc="0-100 values alignment score")
+    composite_score = Column(Float, nullable=True, doc="Weighted composite score")
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    content_items = relationship(
+        "ContentItem", back_populates="creator", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<Creator id={self.id!r} name={self.name!r} platform={self.platform!r}>"
+
+
+class ContentItem(Base):
+    """A single piece of content from any source.
+
+    Blog posts, tweets, academic papers, etc. are all stored here.
+    """
+
+    __tablename__ = "content_items"
+
+    id = Column(String, primary_key=True, default=lambda: uuid.uuid4().hex)
+    creator_id = Column(String, ForeignKey("creators.id"), nullable=False)
+    source_type = Column(
+        String, nullable=False,
+        doc="Content type: blog_post | tweet | paper | instagram_post",
+    )
+    title = Column(String, default="")
+    text_content = Column(Text, default="")
+    url = Column(String, nullable=True)
+    published_at = Column(String, default="")
+    engagement_metrics = Column(
+        JSON, nullable=True,
+        doc="Platform-specific engagement data (likes, shares, citations, etc.)",
+    )
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    creator = relationship("Creator", back_populates="content_items")
+
+    def __repr__(self):
+        return f"<ContentItem id={self.id!r} type={self.source_type!r}>"
+
+
 def create_tables(engine):
     """Create all tables (idempotent).
 

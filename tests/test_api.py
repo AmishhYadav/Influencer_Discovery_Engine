@@ -6,6 +6,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+import os
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
 from src.db.models import Base, create_tables
 from src.db.dao import upsert_channel, create_briefing, update_briefing
 from src.api.main import app

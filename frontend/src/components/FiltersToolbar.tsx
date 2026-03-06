@@ -1,4 +1,13 @@
-import { Search, X } from 'lucide-react'
+import { Search, X, Globe, Youtube, BookOpen, GraduationCap, Twitter } from 'lucide-react'
+import type { Platform } from '@/api/client'
+
+const PLATFORM_OPTIONS: { value: Platform | 'all'; label: string; icon: React.ReactNode }[] = [
+    { value: 'all', label: 'All Sources', icon: <Globe className="w-3.5 h-3.5" /> },
+    { value: 'youtube', label: 'YouTube', icon: <Youtube className="w-3.5 h-3.5" /> },
+    { value: 'blog', label: 'Blogs', icon: <BookOpen className="w-3.5 h-3.5" /> },
+    { value: 'academic', label: 'Academic', icon: <GraduationCap className="w-3.5 h-3.5" /> },
+    { value: 'twitter', label: 'Twitter/X', icon: <Twitter className="w-3.5 h-3.5" /> },
+]
 
 export default function FiltersToolbar({
     minScore,
@@ -6,12 +15,16 @@ export default function FiltersToolbar({
     searchQuery,
     onSearchChange,
     totalCount,
+    platform,
+    onPlatformChange,
 }: {
     minScore: number | null
     onMinScoreChange: (val: number | null) => void
     searchQuery: string
     onSearchChange: (val: string) => void
     totalCount?: number
+    platform?: Platform | null
+    onPlatformChange?: (val: Platform | null) => void
 }) {
     return (
         <div className="flex items-center gap-3 mb-6 flex-wrap">
@@ -36,6 +49,34 @@ export default function FiltersToolbar({
             </div>
 
             <div className="h-5 w-px bg-border-subtle" />
+
+            {/* ── Platform Filter ── */}
+            {onPlatformChange && (
+                <>
+                    <div className="flex items-center gap-1">
+                        {PLATFORM_OPTIONS.map((opt) => {
+                            const isActive = opt.value === 'all'
+                                ? platform == null
+                                : platform === opt.value
+                            return (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => onPlatformChange(opt.value === 'all' ? null : opt.value)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all duration-150 ${isActive
+                                            ? 'bg-accent/15 text-accent border border-accent/30'
+                                            : 'bg-surface-2 text-text-tertiary border border-transparent hover:bg-surface-3 hover:text-text-secondary'
+                                        }`}
+                                >
+                                    {opt.icon}
+                                    <span className="hidden sm:inline">{opt.label}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    <div className="h-5 w-px bg-border-subtle" />
+                </>
+            )}
 
             {/* ── Score Filter ── */}
             <div className="flex items-center gap-2">
@@ -63,6 +104,16 @@ export default function FiltersToolbar({
                     className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
                 >
                     Score ≥ {minScore}
+                    <X className="w-3 h-3" />
+                </button>
+            )}
+
+            {platform && (
+                <button
+                    onClick={() => onPlatformChange?.(null)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-accent/10 text-accent text-xs font-medium hover:bg-accent/20 transition-colors"
+                >
+                    {platform}
                     <X className="w-3 h-3" />
                 </button>
             )}

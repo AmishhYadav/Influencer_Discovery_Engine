@@ -3,12 +3,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.api.routers import creators, briefings
+from src.api.routers import creators, briefings, search
 
 app = FastAPI(
     title="Influencer Discovery Engine",
     description="API for discovering and analyzing influencers aligned with advocacy topics.",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 # CORS — open for MVP
@@ -23,6 +23,7 @@ app.add_middleware(
 # Wire routers
 app.include_router(creators.router)
 app.include_router(briefings.router)
+app.include_router(search.router)
 
 
 @app.get("/health", tags=["system"])

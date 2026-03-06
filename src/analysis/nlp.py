@@ -162,3 +162,50 @@ def score_chunks(
     )
 
     return AlignmentResult.model_validate_json(response.text)
+
+
+def score_text_content(
+    texts: list[str],
+    target_topic: str,
+) -> AlignmentResult:
+    """Score arbitrary text content for alignment with a target topic.
+
+    Unlike score_chunks, this works with any text content (blog posts,
+    tweets, academic abstracts) — no timestamps required.
+
+    Parameters
+    ----------
+    texts : list of text strings to evaluate
+    target_topic : the advocacy topic to evaluate against
+
+    Returns
+    -------
+    AlignmentResult with score, reasoning, and quotes
+    """
+    client = _get_client()
+
+    # Format texts for the prompt
+    texts_block = ""
+    for i, text in enumerate(texts, 1):
+        # Truncate very long texts to keep within context window
+        truncated = text[:2000] if len(text) > 2000 else text
+        texts_block += f"\n[Content {i}]\n{truncated}\n"
+
+    user_prompt = f"""Evaluate the following content for alignment with the topic: "{target_topic}"
+
+{texts_block}"""
+
+    response = client.models.generate_content(
+        model=SCORING_MODEL,
+        contents=[
+            types.Content(role="user", parts=[types.Part.from_text(text=user_prompt)])
+        ],
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=AlignmentResult,
+            temperature=0.3,
+        ),
+    )
+
+    return AlignmentResult.model_validate_json(response.text)

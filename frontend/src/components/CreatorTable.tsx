@@ -2,8 +2,11 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowRight, Users, Video } from 'lucide-react'
 import type { Creator } from '@/api/client'
 import AlignmentScoreBadge from './AlignmentScoreBadge'
+import PlatformBadge from './PlatformBadge'
 import Skeleton from './Skeleton'
 import EmptyState from './EmptyState'
+
+type TableCreator = Creator & { platform?: string }
 
 function formatSubs(count: number): string {
     if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
@@ -15,10 +18,12 @@ export default function CreatorTable({
     creators,
     isLoading,
     onHover,
+    showPlatform = false,
 }: {
-    creators: Creator[]
+    creators: TableCreator[]
     isLoading?: boolean
     onHover?: (id: string | null) => void
+    showPlatform?: boolean
 }) {
     const navigate = useNavigate()
 
@@ -29,8 +34,8 @@ export default function CreatorTable({
                     <thead>
                         <tr className="bg-surface-1 border-b border-border-subtle">
                             <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Creator</th>
-                            <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Subscribers</th>
-                            <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Videos</th>
+                            {showPlatform && <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Source</th>}
+                            <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Followers</th>
                             <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Score</th>
                             <th className="px-4 py-3 w-10" />
                         </tr>
@@ -44,8 +49,8 @@ export default function CreatorTable({
                                         <Skeleton className="h-3 w-56" />
                                     </div>
                                 </td>
+                                {showPlatform && <td className="px-4 py-3.5 text-center"><Skeleton className="h-4 w-16 mx-auto" /></td>}
                                 <td className="px-4 py-3.5 text-right"><Skeleton className="h-4 w-12 ml-auto" /></td>
-                                <td className="px-4 py-3.5 text-right"><Skeleton className="h-4 w-8 ml-auto" /></td>
                                 <td className="px-4 py-3.5 flex justify-center"><Skeleton className="h-10 w-10 rounded-full" /></td>
                                 <td className="px-4 py-3.5" />
                             </tr>
@@ -74,8 +79,9 @@ export default function CreatorTable({
                 <thead>
                     <tr className="bg-surface-1 border-b border-border-subtle">
                         <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Creator</th>
-                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Subscribers</th>
-                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Videos</th>
+                        {showPlatform && <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Source</th>}
+                        <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Followers</th>
+                        {!showPlatform && <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Videos</th>}
                         <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-text-tertiary">Score</th>
                         <th className="px-4 py-3 w-10" />
                     </tr>
@@ -96,8 +102,10 @@ export default function CreatorTable({
                                         {c.title.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="min-w-0">
-                                        <div className="text-[13px] font-semibold text-text-primary truncate max-w-[300px]">
-                                            {c.title}
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[13px] font-semibold text-text-primary truncate max-w-[250px]">
+                                                {c.title}
+                                            </span>
                                         </div>
                                         <div className="text-[11px] text-text-tertiary truncate max-w-[350px] mt-0.5">
                                             {c.description || '—'}
@@ -105,18 +113,25 @@ export default function CreatorTable({
                                     </div>
                                 </div>
                             </td>
+                            {showPlatform && (
+                                <td className="px-4 py-3.5 text-center">
+                                    {c.platform && <PlatformBadge platform={c.platform as any} />}
+                                </td>
+                            )}
                             <td className="px-4 py-3.5 text-right">
                                 <div className="flex items-center justify-end gap-1.5 text-[13px] text-text-secondary tabular-nums">
                                     <Users className="w-3 h-3 text-text-tertiary" />
                                     {formatSubs(c.subscriber_count)}
                                 </div>
                             </td>
-                            <td className="px-4 py-3.5 text-right">
-                                <div className="flex items-center justify-end gap-1.5 text-[13px] text-text-secondary tabular-nums">
-                                    <Video className="w-3 h-3 text-text-tertiary" />
-                                    {c.video_count}
-                                </div>
-                            </td>
+                            {!showPlatform && (
+                                <td className="px-4 py-3.5 text-right">
+                                    <div className="flex items-center justify-end gap-1.5 text-[13px] text-text-secondary tabular-nums">
+                                        <Video className="w-3 h-3 text-text-tertiary" />
+                                        {c.video_count}
+                                    </div>
+                                </td>
+                            )}
                             <td className="px-4 py-3.5">
                                 <div className="flex justify-center">
                                     <AlignmentScoreBadge score={c.alignment_score} size={36} />
