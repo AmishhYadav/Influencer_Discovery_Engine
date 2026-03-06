@@ -1,10 +1,11 @@
-"""NLP analysis engine — OpenAI embeddings and LLM-based alignment scoring."""
+"""NLP analysis engine — Gemini embeddings and LLM-based alignment scoring."""
 
 import logging
 import os
 from typing import Optional
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -35,37 +36,38 @@ class AlignmentResult(BaseModel):
 
 # ── Client ───────────────────────────────────────────────────────────────
 
-_client: Optional[OpenAI] = None
+_client: Optional[genai.Client] = None
 
 
-def _get_client() -> OpenAI:
-    """Lazy-initialize the OpenAI client."""
+def _get_client() -> genai.Client:
+    """Lazy-initialize the Gemini client."""
     global _client
     if _client is None:
-        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        _client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     return _client
 
 
-def set_client(client: OpenAI) -> None:
-    """Override the OpenAI client (useful for testing)."""
+def set_client(client: genai.Client) -> None:
+    """Override the Gemini client (useful for testing)."""
     global _client
     _client = client
 
 
 # ── Embeddings ───────────────────────────────────────────────────────────
 
-EMBEDDING_MODEL = "text-embedding-3-small"
+EMBEDDING_MODEL = "text-embedding-004"
 EMBEDDING_DIM = 1536
 
 
 def get_embedding(text: str) -> list[float]:
     """Get a single embedding vector for a text string."""
     client = _get_client()
-    response = client.embeddings.create(
+    response = client.models.embed_content(
         model=EMBEDDING_MODEL,
-        input=text,
+        contents=text,
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
     )
-    return response.data[0].embedding
+    return response.embeddings[0].values
 
 
 def get_embeddings(texts: list[str]) -> list[list[float]]:
@@ -73,18 +75,17 @@ def get_embeddings(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
     client = _get_client()
-    response = client.embeddings.create(
+    response = client.models.embed_content(
         model=EMBEDDING_MODEL,
-        input=texts,
+        contents=texts,
+        config=types.EmbedContentConfig(output_dimensionality=EMBEDDING_DIM),
     )
-    # Sort by index to maintain order
-    sorted_data = sorted(response.data, key=lambda x: x.index)
-    return [item.embedding for item in sorted_data]
+    return [e.values for e in response.embeddings]
 
 
 # ── LLM Scoring ──────────────────────────────────────────────────────────
 
-SCORING_MODEL = "gpt-4o-mini"
+SCORING_MODEL = "gemini-2.5-flash"
 
 SYSTEM_PROMPT = """You are an expert content analyst specializing in identifying creators whose content naturally aligns with advocacy topics WITHOUT being explicitly activist.
 
@@ -145,21 +146,19 @@ def score_chunks(
 
     user_prompt = f"""Evaluate the following transcript chunks for alignment with the topic: "{target_topic}"
 
-{chunks_text}
+{chunks_text}"""
 
-Provide your analysis as a JSON object with:
-- alignment_score (0-100)
-- reasoning (brief explanation)
-- quotes (3-5 quotes with text and timestamp in MM:SS format)"""
-
-    response = client.beta.chat.completions.parse(
+    response = client.models.generate_content(
         model=SCORING_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
+        contents=[
+            types.Content(role="user", parts=[types.Part.from_text(text=user_prompt)])
         ],
-        response_format=AlignmentResult,
-        temperature=0.3,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_schema=AlignmentResult,
+            temperature=0.3,
+        ),
     )
 
-    return response.choices[0].message.parsed
+    return AlignmentResult.model_validate_json(response.text)

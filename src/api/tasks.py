@@ -52,8 +52,6 @@ def generate_briefing_task(
 
     This runs asynchronously via FastAPI BackgroundTasks.
     """
-    from openai import OpenAI
-
     engine = create_engine(db_url, echo=False)
     create_tables(engine)
 
@@ -96,18 +94,23 @@ def generate_briefing_task(
             if campaign_context:
                 prompt += f"\n\n**Additional Campaign Context:** {campaign_context}"
 
-            # Call OpenAI
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a campaign strategist."},
-                    {"role": "user", "content": prompt},
+            # Call Gemini
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[
+                    types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
                 ],
-                temperature=0.5,
-                max_tokens=1500,
+                config=types.GenerateContentConfig(
+                    system_instruction="You are a campaign strategist.",
+                    temperature=0.5,
+                    max_output_tokens=1500,
+                ),
             )
-            content = response.choices[0].message.content
+            content = response.text
 
             update_briefing(session, briefing_id, content, "completed")
             session.commit()
