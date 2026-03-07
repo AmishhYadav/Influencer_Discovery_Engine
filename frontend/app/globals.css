@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0f0f0f;
+  --foreground: #ffffff;
+  --primary: #3b82f6;
+  --secondary: #1e293b;
+  --accent: #06b6d4;
+  --muted: #404040;
+  --muted-foreground: #a1a1a1;
+  --border: #262626;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Selection styling */
+::selection {
+  background-color: var(--primary);
+  color: var(--background);
+}
+
+/* Smooth transitions for interactive elements */
+button,
+a {
+  transition: all 0.2s ease-in-out;
+}
