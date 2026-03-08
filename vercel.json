@@ -1,0 +1,21 @@
+{
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PUBLIC_API_URL": {
+      "default": "http://localhost:8000"
+    }
+  },
+  "functions": {
+    "api.py": {
+      "runtime": "python3.11"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "api.py"
+    }
+  ]
+}
