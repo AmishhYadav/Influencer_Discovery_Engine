@@ -1,0 +1,39 @@
+FRONTEND REQUIREMENTS GUIDE - INFLUENCER DISCOVERY ENGINE
+
+1. OVERVIEW
+The Influencer Discovery Engine is a platform for finding and analyzing creators across YouTube, Blogs, Academic databases, Twitter, and Instagram. It ranks them based on alignment with advocacy topics and impact metrics.
+
+2. SYSTEM ARCHITECTURE
+- Backend: FastAPI (Python)
+- Default API Base URL: http://localhost:8000
+- Data Format: JSON
+
+3. KEY API ENDPOINTS
+- SEARCH & DISCOVERY
+  - POST /api/search -> Body: { "query": string, "sources": string[], "max_results": int }
+  - GET /api/search/creators -> Lists all ranked creators (paginated).
+  - GET /api/search/creators/{id} -> Full details (Bio, Scores, Content Feed).
+
+- BRIEFINGS
+  - POST /api/briefings/generate -> Body: { "channel_id": string, "campaign_context": string }
+  - GET /api/briefings/{id} -> Poll for status/content.
+
+- LEGACY (YouTube Only)
+  - GET /api/creators -> List YouTube channels by alignment.
+  - GET /api/creators/{id} -> Details and specific alignment quotes.
+
+4. CORE FUNCTIONAL REQUIREMENTS
+- SEARCH DASHBOARD: Input for keywords/URLs + Source multi-select (YouTube, Blog, Academic, etc.).
+- DISCOVERY FEED: Grid/List view with "Composite Scores" (0-100).
+- METRIC VISUALIZATION: Show 4 key scores per creator (Credibility, Engagement, Reach, Alignment).
+- ALIGNMENT PROOF: Specifically for YouTube, display extracted "Quotes" as evidence of alignment.
+- BRIEFING WORKFLOW: A "Generate" button that triggers an async task, shows a loading state, and displays a Markdown report once ready.
+
+5. UI/UX DESIGN GUIDELINES
+- AESTHETIC: Modern SaaS, Dark Mode, High Density/Data-Rich.
+- THEME: Emerald (#10B981) for success/metrics, Indigo/Violet for AI/Analysis.
+- COMPONENTS: Radar charts for scores, skeleton loaders for async data, toast notifications for errors.
+- RESPONSIVENESS: Mobile-friendly list view, desktop-optimized dashboard.
+
+6. SETUP
+- Ensure the frontend uses the NEXT_PUBLIC_API_URL environment variable to point to the backend.
