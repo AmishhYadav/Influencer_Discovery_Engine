@@ -152,9 +152,9 @@ def _cosine_similarity(a: list[float], b: list[float]) -> float:
 
 # ── Briefings ────────────────────────────────────────────────────────────
 
-def create_briefing(session: Session, channel_id: str) -> Briefing:
+def create_briefing(session: Session, creator_id: str) -> Briefing:
     """Create a new pending briefing record."""
-    briefing = Briefing(channel_id=channel_id)
+    briefing = Briefing(creator_id=creator_id)
     session.add(briefing)
     session.flush()  # Populate the auto-generated id
     return briefing

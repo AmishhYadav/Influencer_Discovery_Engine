@@ -37,7 +37,6 @@ class Channel(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     videos = relationship("Video", back_populates="channel", cascade="all, delete-orphan")
-    briefings = relationship("Briefing", back_populates="channel", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Channel id={self.id!r} title={self.title!r}>"
@@ -82,18 +81,18 @@ class TranscriptChunk(Base):
 
 
 class Briefing(Base):
-    """An async-generated engagement briefing for a channel."""
+    """An async-generated engagement briefing for a creator."""
 
     __tablename__ = "briefings"
 
     id = Column(String, primary_key=True, default=lambda: uuid.uuid4().hex)
-    channel_id = Column(String, ForeignKey("channels.id"), nullable=False)
+    creator_id = Column(String, ForeignKey("creators.id"), nullable=False)
     content = Column(Text, nullable=True, doc="Generated markdown briefing")
     status = Column(String, default="pending", doc="pending | completed | failed")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    channel = relationship("Channel", back_populates="briefings")
+    creator = relationship("Creator", back_populates="briefings")
 
     def __repr__(self):
         return f"<Briefing id={self.id!r} status={self.status!r}>"
@@ -135,6 +134,9 @@ class Creator(Base):
 
     content_items = relationship(
         "ContentItem", back_populates="creator", cascade="all, delete-orphan"
+    )
+    briefings = relationship(
+        "Briefing", back_populates="creator", cascade="all, delete-orphan"
     )
 
     def __repr__(self):

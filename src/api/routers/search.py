@@ -83,6 +83,11 @@ def list_multi_creators(
     db: Session = Depends(get_db),
 ):
     """List creators from all sources, ranked by composite score."""
+    # Bootstrap: Ensure top YouTube channels exist as Creator records
+    if not platform or platform == "youtube":
+        _get_youtube_creators(db, query="", max_results=50)
+        db.commit()
+
     creators, total = get_creators_ranked(
         db,
         platform=platform,
@@ -321,46 +326,147 @@ def _ingest_instagram_results(db: Session, query: str, max_results: int) -> list
 
 
 def _get_youtube_creators(db: Session, query: str, max_results: int) -> list[Creator]:
-    """Return existing YouTube creators matching a query (no new ingestion)."""
+    """Search for YouTube channels matching the query, fetch transcripts, and score.
+    
+    If query is empty (e.g. dashboard load bootstrap), bypasses the live API and returns existing DB records.
+    If query matches existing channels in the DB, return those first to save API quota & time.
+    """
     from src.db.models import Channel
+    
+    # 1. Check local DB first
+    db_query = db.query(Channel).order_by(desc(Channel.alignment_score))
+    
+    if query:
+        # Search for query in title or description
+        db_query = db_query.filter(
+            (Channel.title.ilike(f"%{query}%")) | 
+            (Channel.description.ilike(f"%{query}%"))
+        )
+        
+    channels = db_query.limit(max_results).all()
+    
+    # If we found enough channels locally (or it's a bootstrap empty query), return them!
+    if channels and (not query or len(channels) >= min(max_results, 3)):
+        creators = []
+        for ch in channels:
+            creator = upsert_creator(db, {
+                "name": ch.title,
+                "platform": "youtube",
+                "platform_id": ch.id,
+                "profile_url": f"https://youtube.com/channel/{ch.id}",
+                "bio": ch.description or "",
+                "follower_count": ch.subscriber_count or 0,
+            })
+            if ch.alignment_score is not None:
+                from src.analysis.scoring import score_creator
+                breakdown = score_creator(
+                    platform="youtube",
+                    bio=ch.description or "",
+                    follower_count=ch.subscriber_count or 0,
+                    alignment_score=float(ch.alignment_score),
+                )
+                update_creator_scores(
+                    db, creator.id,
+                    credibility_score=breakdown.credibility_score,
+                    engagement_score=breakdown.engagement_score,
+                    reach_score=breakdown.reach_score,
+                    alignment_score=float(ch.alignment_score),
+                    composite_score=breakdown.composite_score,
+                )
+            creators.append(creator)
+        db.commit()
+        logger.info(f"Returning {len(creators)} local DB hits for query '{query}'")
+        return creators
 
-    channels = (
-        db.query(Channel)
-        .filter(Channel.title.ilike(f"%{query}%"))
-        .order_by(desc(Channel.alignment_score))
-        .limit(max_results)
-        .all()
-    )
+    # 2. Active Live Search (Fallback for new queries)
+    logger.info(f"No local matches found for '{query}'. Hitting YouTube API...")
+    import os
+    from src.ingestion.youtube_api import YouTubeDataAPI
+    from src.ingestion.transcripts import fetch_transcript
+    from src.ingestion.cleaner import clean_transcript
+    from src.analysis.scoring import score_creator
+    from src.analysis.nlp import score_text_content
 
-    # Convert Channel records to Creator format on-the-fly
+    api_key = os.getenv("YOUTUBE_API_KEY")
+    if not api_key:
+        logger.error("YOUTUBE_API_KEY environment variable is not set")
+        return []
+
+    yt = YouTubeDataAPI(api_key)
+    try:
+        channels = yt.search_channels(query, max_results=max_results)
+    except Exception as e:
+        logger.error("YouTube search API failed: %s", e)
+        return []
+
     creators = []
-    for ch in channels:
+    for ch_data in channels:
+        channel_id = ch_data["channel_id"]
+        
         creator = upsert_creator(db, {
-            "name": ch.title,
+            "name": ch_data["title"],
             "platform": "youtube",
-            "platform_id": ch.id,
-            "profile_url": f"https://youtube.com/channel/{ch.id}",
-            "bio": ch.description or "",
-            "follower_count": ch.subscriber_count or 0,
+            "platform_id": channel_id,
+            "profile_url": f"https://youtube.com/channel/{channel_id}",
+            "bio": ch_data.get("description", ""),
+            "follower_count": ch_data.get("subscriber_count", 0),
         })
 
-        if ch.alignment_score is not None:
-            from src.analysis.scoring import score_creator
-            breakdown = score_creator(
-                platform="youtube",
-                bio=ch.description or "",
-                follower_count=ch.subscriber_count or 0,
-                alignment_score=float(ch.alignment_score),
-            )
-            update_creator_scores(
-                db, creator.id,
-                credibility_score=breakdown.credibility_score,
-                engagement_score=breakdown.engagement_score,
-                reach_score=breakdown.reach_score,
-                alignment_score=float(ch.alignment_score),
-                composite_score=breakdown.composite_score,
-            )
+        try:
+            # Fetch 3 latest videos to grab some quick transcript text for alignment context
+            videos = yt.get_latest_videos(channel_id, count=3)
+        except Exception as e:
+            logger.warning("Could not fetch videos for %s: %s", channel_id, e)
+            videos = []
+            
+        transcript_texts = []
+        for vid in videos:
+            video_id = vid["video_id"]
+            raw_transcript = fetch_transcript(video_id)
+            if raw_transcript:
+                cleaned = clean_transcript(raw_transcript)
+                # Combine all text chunks into a single string
+                full_text = " ".join(chunk.get("text", "") for chunk in cleaned)
+                
+                if full_text.strip():
+                    transcript_texts.append(full_text)
+                    
+                    # Store the transcript locally in the unified content table
+                    upsert_content_item(db, {
+                        "creator_id": creator.id,
+                        "source_type": "youtube_video",
+                        "title": vid["title"],
+                        "text_content": full_text,
+                        "url": f"https://youtube.com/watch?v={video_id}",
+                        "published_at": vid.get("published_at", ""),
+                    })
+        
+        # Determine dynamic alignment via LLM analysis of transcripts vs the active query 
+        alignment_score = 0.0
+        if transcript_texts:
+            try:
+                align_result = score_text_content(transcript_texts, target_topic=query)
+                alignment_score = float(align_result.alignment_score)
+            except Exception as e:
+                logger.error("LLM Alignment scoring failed for %s: %s", channel_id, e)
 
+        breakdown = score_creator(
+            platform="youtube",
+            bio=creator.bio or "",
+            follower_count=creator.follower_count or 0,
+            alignment_score=alignment_score,
+        )
+        
+        update_creator_scores(
+            db, creator.id,
+            credibility_score=breakdown.credibility_score,
+            engagement_score=breakdown.engagement_score,
+            reach_score=breakdown.reach_score,
+            alignment_score=alignment_score,
+            composite_score=breakdown.composite_score,
+        )
+        
         creators.append(creator)
 
+    db.commit()
     return creators

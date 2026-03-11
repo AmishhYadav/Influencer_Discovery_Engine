@@ -49,7 +49,7 @@ class CreatorListResponse(BaseModel):
 
 class BriefingRequest(BaseModel):
     """Request body for triggering briefing generation."""
-    channel_id: str
+    creator_id: str
     campaign_context: Optional[str] = None
 
 
@@ -58,7 +58,7 @@ class BriefingResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
-    channel_id: str
+    creator_id: str
     content: Optional[str] = None
     status: str
 

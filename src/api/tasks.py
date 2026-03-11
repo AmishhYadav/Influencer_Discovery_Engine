@@ -5,9 +5,8 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src.db.models import Channel, create_tables
-from src.db.dao import get_top_chunks, update_briefing
-from src.analysis.nlp import get_embedding, score_chunks
+from src.db.models import Creator, ContentItem, create_tables
+from src.db.dao import update_briefing
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +15,11 @@ BRIEFING_PROMPT_TEMPLATE = """You are a campaign strategist writing a one-page e
 Based on the creator's metadata and content excerpts provided below, generate a professional, concise outreach cheat sheet.
 
 ## Source Data
-- **Name:** {channel_title}
-- **Subscribers:** {subscriber_count:,}
+- **Name:** {creator_name}
+- **Platform:** {platform}
+- **Followers/Reach:** {follower_count:,}
 - **Alignment Score:** {alignment_score}/100
 - **Campaign Topic:** {topic}
-
-### Key Quotes
-{quotes_section}
 
 ### Content Excerpts
 {chunks_section}
@@ -34,7 +31,7 @@ Write the briefing in Markdown using specifically these 6 sections:
 1. **Creator Profile** — Summary of who they are and their content niche.
 2. **Mission Relevance** — Why this creator is a high-value/natural fit for the campaign topic "{topic}".
 3. **Key Topics** — The recurring themes in their content that align with our mission.
-4. **Metrics** — Highlight their subscriber count and reach.
+4. **Metrics** — Highlight their subscriber/follower count and reach.
 5. **Example Content** — Cite specific quotes or excerpts provided above that demonstrate their alignment.
 6. **Suggested Talking Points** — 3-5 specific, natural hooks we can use for outreach.
 
@@ -43,12 +40,12 @@ Keep it professional, evidence-based, and exactly under one page (~400-500 words
 
 def generate_briefing_task(
     briefing_id: str,
-    channel_id: str,
+    creator_id: str,
     db_url: str,
     campaign_context: Optional[str] = None,
     topic: str = "plant-based health, sustainable food systems",
 ):
-    """Background task: generate an engagement briefing for a channel.
+    """Background task: generate an engagement briefing for any creator.
 
     This runs asynchronously via FastAPI BackgroundTasks.
     """
@@ -57,36 +54,34 @@ def generate_briefing_task(
 
     try:
         with Session(engine) as session:
-            channel = session.get(Channel, channel_id)
-            if channel is None:
-                update_briefing(session, briefing_id, "Channel not found", "failed")
+            creator = session.get(Creator, creator_id)
+            if creator is None:
+                update_briefing(session, briefing_id, "Creator not found", "failed")
                 session.commit()
                 return
 
-            # Get top aligned chunks
-            target_embedding = get_embedding(topic)
-            top_chunks = get_top_chunks(session, channel_id, target_embedding, limit=10)
-
-            # Build the prompt
-            quotes_section = ""
-            if channel.alignment_quotes:
-                for q in channel.alignment_quotes:
-                    quotes_section += f'- "{q.get("text", "")}" ({q.get("timestamp", "")})\n'
-            else:
-                quotes_section = "- No quotes available\n"
+            # Grab their recent content items to feed the LLM
+            content_items = (
+                session.query(ContentItem)
+                .filter(ContentItem.creator_id == creator_id)
+                .order_by(ContentItem.created_at.desc())
+                .limit(5)
+                .all()
+            )
 
             chunks_section = ""
-            for i, chunk in enumerate(top_chunks[:5], 1):
-                chunks_section += f"\n**Excerpt {i}:**\n> {chunk.text[:300]}...\n"
+            for i, item in enumerate(content_items, 1):
+                preview = item.text_content[:500] + "..." if len(item.text_content) > 500 else item.text_content
+                chunks_section += f"\n**Excerpt {i} ({item.source_type}):**\n> {preview}\n"
 
-            if not chunks_section:
+            if not chunks_section.strip():
                 chunks_section = "No aligned content excerpts available."
 
             prompt = BRIEFING_PROMPT_TEMPLATE.format(
-                channel_title=channel.title,
-                subscriber_count=channel.subscriber_count or 0,
-                alignment_score=channel.alignment_score or 0,
-                quotes_section=quotes_section,
+                creator_name=creator.name,
+                platform=creator.platform.title(),
+                follower_count=creator.follower_count or 0,
+                alignment_score=creator.alignment_score or 0,
                 chunks_section=chunks_section,
                 topic=topic,
             )
@@ -114,7 +109,7 @@ def generate_briefing_task(
 
             update_briefing(session, briefing_id, content, "completed")
             session.commit()
-            logger.info("Briefing %s completed for channel %s", briefing_id, channel_id)
+            logger.info("Briefing %s completed for creator %s", briefing_id, creator_id)
 
     except Exception as e:
         logger.error("Briefing generation failed: %s", e)
