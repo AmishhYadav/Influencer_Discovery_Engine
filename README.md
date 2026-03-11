@@ -1,151 +1,383 @@
-# Influent: Non-Activist Influencer Discovery Engine 🌿
+<div align="center">
 
-**Influent** is an AI-powered discovery engine built for advocacy organizations to identify highly credible, naturally aligned creative voices (like doctors, scientists, and chefs) using existing content signals—**without selecting for polarizing activism.**
+# 🔍 Influencer Discovery Engine
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
-[![Development Phase](https://img.shields.io/badge/phase-1_%E2%80%93_Ingestion-blue.svg)]()
+**An AI-powered platform for discovering, analyzing, and ranking social media influencers using advanced NLP and multi-platform data aggregation.**
+
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js&logoColor=white)](https://nextjs.org)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[Features](#-features) · [Architecture](#-architecture) · [Getting Started](#-getting-started) · [API Reference](#-api-reference) · [Contributing](#-contributing)
+
+</div>
 
 ---
 
-## 📍 Table of Contents
+## 📋 Table of Contents
 
-- [What This Is](#-what-this-is)
-- [Core Value](#-core-value)
-- [Key Features](#-key-features)
-- [Tech Stack](#-tech-stack)
+- [Features](#-features)
 - [Architecture](#-architecture)
-- [Installation](#-installation)
-- [Usage](#-usage)
+- [Tech Stack](#-tech-stack)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Environment Variables](#environment-variables)
+  - [Running the Application](#running-the-application)
 - [Project Structure](#-project-structure)
-- [Configuration](#-configuration)
-- [Roadmap](#-roadmap)
+- [API Reference](#-api-reference)
+- [How It Works](#-how-it-works)
 - [Contributing](#-contributing)
 - [License](#-license)
 
 ---
 
-## 🔍 What This Is
+## ✨ Features
 
-Influent helps advocacy outreach teams identify influencers whose public content already aligns with core organizational values (e.g., plant-based health, sustainability, or ethical food systems). Unlike traditional tools that search for hashtags, Influent uses Gemini-powered semantic analysis to find professionals whose primary identity is expertise, not activism.
-
----
-
-## 💡 Core Value
-
-> **"Identify highly credible, naturally aligned creative voices using existing content signals without selecting for polarizing activism."**
-
-The system actively deprioritizes polarizing messaging in favor of "soft activism" and natural alignment, making outreach more effective and credible for mainstream audiences.
-
----
-
-## ✨ Key Features
-
-- **Semantic Alignment Engine**: Uses Gemini AI to analyze YouTube transcripts and identify deep thematic alignment beyond simple keywords.
-- **Multi-Source discovery**: Unified database handling YouTube, Blog authors, Academic researchers, and Social Media profiles.
-- **Credibility Scoring**: Complex algorithm that ranks candidates based on professional authority (e.g., Doctors, Chefs, Scientists) and audience engagement.
-- **AI Strategy Briefings**: Generates "Outreach Playbooks" for human coordinators, providing specific content citations and suggested talking points.
-- **Comparison Analytics**: Side-by-side score breakdowns for shortlisted creators.
+| Feature | Description |
+|---------|-------------|
+| 🤖 **AI-Powered Analysis** | Leverages NLP (SpaCy, NLTK) for content analysis, sentiment scoring, and topic extraction |
+| 🌐 **Multi-Platform Support** | Aggregates data from YouTube, Instagram, Twitter/X, and more via RapidAPI |
+| 📊 **Smart Ranking** | Composite scoring algorithm combining engagement rate, reach, relevance, and authenticity |
+| 🔎 **Natural Language Search** | Search for influencers using plain English queries (e.g., *"tech reviewers with 100k+ followers"*) |
+| 📈 **Real-Time Analytics** | Live engagement metrics, audience demographics, and growth trends |
+| 🏷️ **Niche Classification** | Automatic categorization into niches like Tech, Fashion, Fitness, Gaming, etc. |
+| ⚡ **Caching Layer** | Redis-backed caching for fast repeated queries and rate-limit management |
+| 🎨 **Modern Dashboard** | Responsive Next.js frontend with interactive charts and filtering |
 
 ---
 
-## 💻 Tech Stack
+## 🏗 Architecture
 
-### Core Engine
-- **Backend API**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3.10+)
-- **Analysis Logic**: [Google Gemini API](https://ai.google.dev/) (Flash 2.5) for semantic scoring and summarization.
-- **Database**: PostgreSQL with `pgvector` compatibility (supported via local SQLAlchemy/SQLite fallback).
-- **Ingestion**: `youtube-transcript-api` and Google Search integration.
-
-### Frontend Dashboard
-- **Framework**: [React](https://reactjs.org/) + [Vite](https://vitejs.dev/)
-- **UI System**: Framer Motion for animations & Lucide icons.
-- **API Integration**: Custom Type-safe client for unified search and briefing polling.
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Next.js Frontend                     │
+│              (Dashboard · Search · Analytics)           │
+└──────────────────────┬──────────────────────────────────┘
+                       │ REST API
+┌──────────────────────▼──────────────────────────────────┐
+│                   FastAPI Backend                        │
+│  ┌─────────────┐ ┌──────────────┐ ┌──────────────────┐ │
+│  │  API Router  │ │  NLP Engine  │ │  Ranking Engine  │ │
+│  │  & Endpoints │ │ (SpaCy/NLTK) │ │ (Scoring Logic)  │ │
+│  └──────┬──────┘ └──────┬───────┘ └────────┬─────────┘ │
+│         │               │                  │            │
+│  ┌──────▼───────────────▼──────────────────▼─────────┐  │
+│  │              Data Aggregation Layer               │  │
+│  │    (YouTube · Instagram · Twitter · RapidAPI)     │  │
+│  └───────────────────────┬───────────────────────────┘  │
+│                          │                              │
+│  ┌───────────────────────▼───────────────────────────┐  │
+│  │          Cache Layer (Redis / In-Memory)          │  │
+│  └───────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## ⚙️ Installation
+## 🛠 Tech Stack
 
-### 1. Clone & Setup
+### Backend
+- **Framework:** FastAPI (Python 3.8+)
+- **NLP:** SpaCy, NLTK, TextBlob
+- **Data Fetching:** HTTPX, RapidAPI integrations
+- **Caching:** Redis (optional, falls back to in-memory)
+- **Validation:** Pydantic v2
+
+### Frontend
+- **Framework:** Next.js 14 (React 18)
+- **Styling:** Tailwind CSS
+- **Charts:** Recharts
+- **HTTP Client:** Axios
+- **Language:** TypeScript
+
+### DevOps & Tooling
+- **Containerization:** Docker & Docker Compose
+- **Testing:** Pytest
+- **Linting:** ESLint, Prettier
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Python** 3.8+
+- **Node.js** 18+
+- **npm** or **yarn**
+- **Redis** (optional — the app falls back to in-memory caching)
+- API keys from [RapidAPI](https://rapidapi.com/) for social media data
+
+### Installation
+
 ```bash
-git clone https://github.com/AmishhYadav/Influencer_Discovery_Engine.git
+# Clone the repository
+git clone https://github.com/your-username/Influencer_Discovery_Engine.git
 cd Influencer_Discovery_Engine
 ```
 
-### 2. Backend Installation
+#### Backend Setup
+
 ```bash
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate
+cd backend
+
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Download NLP models
+python -m spacy download en_core_web_sm
+python -m nltk.downloader punkt vader_lexicon stopwords
 ```
 
-### 3. Frontend Installation
+#### Frontend Setup
+
 ```bash
 cd frontend
+
+# Install dependencies
 npm install
 ```
 
----
+### Environment Variables
 
-## 🚀 Usage
+Create a `.env` file in the `backend/` directory:
 
-### 1. Configure Environment
-Create a `.env` file in the root directory:
 ```env
-YOUTUBE_API_KEY=your_key_here
-GEMINI_API_KEY=your_key_here
-DATABASE_URL=sqlite:///./engine.db
+# API Keys
+RAPID_API_KEY=your_rapidapi_key_here
+
+# YouTube (optional — direct API)
+YOUTUBE_API_KEY=your_youtube_api_key_here
+
+# Redis (optional)
+REDIS_URL=redis://localhost:6379/0
+
+# Server
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
 ```
 
-### 2. Run the Engine
-```bash
-# Terminal 1: Backend
-uvicorn src.api.main:app --reload
+Create a `.env.local` file in the `frontend/` directory:
 
-# Terminal 2: Frontend
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+### Running the Application
+
+#### Option 1: Docker Compose (Recommended)
+
+```bash
+docker-compose up --build
+```
+
+The frontend will be available at `http://localhost:3000` and the API at `http://localhost:8000`.
+
+#### Option 2: Manual
+
+**Terminal 1 — Backend:**
+```bash
+cd backend
+source venv/bin/activate
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```bash
 cd frontend
 npm run dev
 ```
 
 ---
 
-## 📂 Project Structure
+## 📁 Project Structure
 
-```text
+```
 Influencer_Discovery_Engine/
-├── .planning/          # Vision, Requirements, and Phase Tracking
-├── src/
-│   ├── api/            # FastAPI Routers & Pydantic Schemas
-│   ├── ingestion/      # YouTube Metadata & Transcript Fetchers
-│   ├── analysis/       # Scoring & NLP Logic (Gemini Integrated)
-│   └── db/             # Unified Creator & Content Models
-└── frontend/           # React Search & Analytics Dashboards
+├── backend/
+│   ├── app/
+│   │   ├── main.py                 # FastAPI application entry point
+│   │   ├── config.py               # Configuration & environment settings
+│   │   ├── api/
+│   │   │   └── routes/
+│   │   │       ├── influencer_routes.py  # Influencer search & detail endpoints
+│   │   │       └── analytics_routes.py   # Analytics & trending endpoints
+│   │   ├── models/
+│   │   │   └── influencer.py       # Pydantic data models
+│   │   ├── services/
+│   │   │   ├── data_aggregator.py  # Multi-platform data fetching
+│   │   │   ├── youtube_service.py  # YouTube API integration
+│   │   │   ├── instagram_service.py# Instagram data service
+│   │   │   ├── twitter_service.py  # Twitter/X data service
+│   │   │   ├── nlp_analyzer.py     # NLP content & sentiment analysis
+│   │   │   ├── ranking_engine.py   # Influencer scoring & ranking
+│   │   │   └── cache_service.py    # Redis / in-memory caching
+│   │   └── utils/
+│   │       ├── helpers.py          # Shared utility functions
+│   │       └── rate_limiter.py     # API rate-limit handling
+│   ├── tests/                      # Pytest test suite
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── app/                    # Next.js App Router pages
+│   │   ├── components/             # Reusable UI components
+│   │   ├── services/               # API client services
+│   │   ├── types/                  # TypeScript type definitions
+│   │   └── utils/                  # Frontend utilities
+│   ├── public/                     # Static assets
+│   ├── package.json
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json
+│   └── Dockerfile
+├── docker-compose.yml
+├── .gitignore
+├── LICENSE
+└── README.md
 ```
 
 ---
 
-## 🗺️ Roadmap
+## 📡 API Reference
 
-- [x] **Phase 1: Ingestion** (YouTube Transcript Pipeline)
-- [x] **Phase 2: Analysis Engine** (Semantic Alignment Scoring)
-- [x] **Phase 3: Core Data API** (Unified Creator Schema)
-- [x] **Phase 4: Frontend Dashboard** (Search & Analytics)
-- [x] **Phase 5: Briefing Generator** (Playbook Strategy AI)
-- [ ] **Phase 6: Advanced Source Expansion** (Official X/LinkedIn integration)
+### Base URL
+
+```
+http://localhost:8000/api
+```
+
+### Endpoints
+
+#### Search Influencers
+
+```http
+GET /api/influencers/search?query={query}&platform={platform}&niche={niche}&limit={limit}
+```
+
+| Parameter  | Type     | Default | Description                          |
+|------------|----------|---------|--------------------------------------|
+| `query`    | `string` | —       | Natural language search query        |
+| `platform` | `string` | `all`   | Filter by platform (`youtube`, `instagram`, `twitter`) |
+| `niche`    | `string` | `all`   | Filter by niche (`tech`, `fashion`, `fitness`, etc.)   |
+| `limit`    | `int`    | `20`    | Number of results to return          |
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "id": "abc123",
+      "name": "Jane Doe",
+      "platform": "youtube",
+      "niche": "technology",
+      "followers": 250000,
+      "engagement_rate": 4.8,
+      "relevance_score": 92.5,
+      "avatar_url": "https://...",
+      "profile_url": "https://youtube.com/..."
+    }
+  ],
+  "total": 1,
+  "query_analysis": {
+    "keywords": ["tech", "reviewer"],
+    "sentiment": "neutral",
+    "intent": "discovery"
+  }
+}
+```
+
+#### Get Influencer Details
+
+```http
+GET /api/influencers/{influencer_id}
+```
+
+#### Get Trending Influencers
+
+```http
+GET /api/analytics/trending?platform={platform}&timeframe={timeframe}
+```
+
+#### Get Niche Overview
+
+```http
+GET /api/analytics/niches
+```
+
+> 📖 **Interactive API Docs:** Visit `http://localhost:8000/docs` for the full Swagger UI.
+
+---
+
+## ⚙️ How It Works
+
+1. **Query Parsing** — The NLP engine parses the user's search query to extract keywords, intent, filters, and semantic meaning using SpaCy and NLTK.
+
+2. **Data Aggregation** — The platform fetches influencer data from multiple social media APIs concurrently via HTTPX async requests through RapidAPI.
+
+3. **Content Analysis** — Each influencer's recent content is analyzed for:
+   - **Sentiment** (positive/negative/neutral)
+   - **Topic relevance** (keyword & semantic matching)
+   - **Engagement authenticity** (bot detection heuristics)
+
+4. **Scoring & Ranking** — A composite score is computed:
+   ```
+   Score = w₁·EngagementRate + w₂·RelevanceScore + w₃·AuthenticityScore + w₄·GrowthRate
+   ```
+   Weights are dynamically adjusted based on the query context.
+
+5. **Results Delivery** — Ranked results are returned with rich metadata, cached for subsequent requests, and rendered on the Next.js dashboard.
+
+---
+
+## 🧪 Running Tests
+
+```bash
+cd backend
+pytest tests/ -v --tb=short
+```
+
+```bash
+cd frontend
+npm run test
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
+4. **Push** to the branch (`git push origin feature/amazing-feature`)
+5. **Open** a Pull Request
+
+### Development Guidelines
+
+- Follow [PEP 8](https://pep8.org/) for Python code
+- Use TypeScript strict mode for frontend code
+- Write tests for new features
+- Update documentation for API changes
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 👤 Author
+<div align="center">
 
-**Amish Yadav**
-- Project Repository: [Influencer Discovery Engine](https://github.com/AmishhYadav/Influencer_Discovery_Engine)
-- Reference Documents: [.planning/PROJECT.md](file://./.planning/PROJECT.md)
+**Built with ❤️ using FastAPI & Next.js**
+
+[⬆ Back to Top](#-influencer-discovery-engine)
+
+</div>
