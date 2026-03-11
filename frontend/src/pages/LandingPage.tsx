@@ -33,9 +33,9 @@ export default function LandingPage() {
                     </div>
 
                     <h1 className="text-6xl md:text-8xl font-medium tracking-tighter text-white drop-shadow-2xl">
-                        Find the perfect <br />
+                        Find the Perfect <br />
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-indigo-400 to-violet-400">
-                            voices for your mission
+                            Voices for your Mission
                         </span>
                     </h1>
 
