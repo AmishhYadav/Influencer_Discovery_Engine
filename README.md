@@ -57,32 +57,34 @@
 ## 🏗 System Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        Frontend (React + Vite)                          │
-│          Landing Page · Search · Analytics · Briefings                  │
-└─────────────────────────────┬────────────────────────────────────────────┘
-                              │ REST API
-┌─────────────────────────────▼────────────────────────────────────────────┐
-│                         FastAPI Backend                                  │
-│  ┌──────────────┐   ┌────────────────┐   ┌───────────────────────────┐  │
-│  │ Search Router │   │ Creators Router│   │ Briefings Router + Tasks  │  │
-│  └──────┬───────┘   └────────┬───────┘   └─────────────┬─────────────┘  │
-│         │                    │                          │                │
-│  ┌──────▼────────────────────▼──────────────────────────▼─────────────┐  │
-│  │                      Ingestion Layer                               │  │
-│  │   YouTube API · Twitter · Instagram · Blog · Academic · Discovery  │  │
-│  └──────────────────────────┬────────────────────────────────────────┘  │
-│                             │                                           │
-│  ┌──────────────────────────▼────────────────────────────────────────┐  │
-│  │                      Analysis Engine                              │  │
-│  │        Gemini LLM Scoring · Composite Scorer · Embeddings         │  │
-│  └──────────────────────────┬────────────────────────────────────────┘  │
-└─────────────────────────────┼────────────────────────────────────────────┘
-                              │
-                 ┌────────────▼────────────┐
-                 │   PostgreSQL + pgvector  │
-                 │  Creators · Content · AI │
-                 └─────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│             Frontend  (React + Vite)                  │
+│   Landing Page · Search · Analytics · Briefings       │
+└───────────────────────────┬───────────────────────────┘
+                            │
+                       REST API
+                            │
+┌───────────────────────────▼───────────────────────────┐
+│                                                       │
+│                   FastAPI Backend                     │
+│                                                       │
+│  Routers:                                             │
+│    Search · Creators · Briefings · Background Tasks   │
+│                                                       │
+│  Ingestion Layer:                                     │
+│    YouTube API · Twitter · Instagram                  │
+│    Blog Scraper · Academic · Web Discovery            │
+│                                                       │
+│  Analysis Engine:                                     │
+│    Gemini LLM Scoring · Composite Scorer              │
+│    Text Chunker · Embeddings (1536-dim)               │
+│                                                       │
+└───────────────────────────┬───────────────────────────┘
+                            │
+              ┌─────────────▼──────────────┐
+              │  PostgreSQL  +  pgvector   │
+              │  Creators · Content · AI   │
+              └────────────────────────────┘
 ```
 
 ---
