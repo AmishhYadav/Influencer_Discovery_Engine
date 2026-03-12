@@ -183,6 +183,7 @@ def _ingest_blog_results(db: Session, query: str, max_results: int, force_live: 
                 "bio": "",
             })
 
+            content_texts = []
             for article in author_articles:
                 upsert_content_item(db, {
                     "creator_id": creator.id,
@@ -192,6 +193,34 @@ def _ingest_blog_results(db: Session, query: str, max_results: int, force_live: 
                     "url": article.get("url", ""),
                     "published_at": article.get("published_at", ""),
                 })
+                if article.get("text_content"):
+                    content_texts.append(article["text_content"])
+
+            # LLM alignment scoring against the blog content
+            alignment_score = 0.0
+            if content_texts:
+                try:
+                    from src.analysis.nlp import score_text_content
+                    align_result = score_text_content(content_texts, target_topic=query)
+                    alignment_score = float(align_result.alignment_score)
+                except Exception as e:
+                    logger.error("Blog alignment scoring failed: %s", e)
+
+            from src.analysis.scoring import score_creator
+            breakdown = score_creator(
+                platform="blog",
+                bio=creator.bio or "",
+                follower_count=0,
+                alignment_score=alignment_score,
+            )
+            update_creator_scores(
+                db, creator.id,
+                credibility_score=breakdown.credibility_score,
+                engagement_score=breakdown.engagement_score,
+                reach_score=breakdown.reach_score,
+                alignment_score=alignment_score,
+                composite_score=breakdown.composite_score,
+            )
 
             creators.append(creator)
         return creators
@@ -247,6 +276,17 @@ def _ingest_academic_results(db: Session, query: str, max_results: int, force_li
                 },
             })
 
+        # LLM alignment scoring against paper abstracts
+        alignment_score = 0.0
+        paper_texts = [p.get("abstract", "") for p in author_data.get("papers", []) if p.get("abstract")]
+        if paper_texts:
+            try:
+                from src.analysis.nlp import score_text_content
+                align_result = score_text_content(paper_texts, target_topic=query)
+                alignment_score = float(align_result.alignment_score)
+            except Exception as e:
+                logger.error("Academic alignment scoring failed: %s", e)
+
         # Score the creator
         from src.analysis.scoring import score_creator
         breakdown = score_creator(
@@ -255,12 +295,14 @@ def _ingest_academic_results(db: Session, query: str, max_results: int, force_li
             follower_count=0,
             h_index=author_data.get("h_index", 0),
             total_citations=author_data.get("total_citations", 0),
+            alignment_score=alignment_score,
         )
         update_creator_scores(
             db, creator.id,
             credibility_score=breakdown.credibility_score,
             engagement_score=breakdown.engagement_score,
             reach_score=breakdown.reach_score,
+            alignment_score=alignment_score,
             composite_score=breakdown.composite_score,
         )
 
@@ -307,18 +349,31 @@ def _ingest_twitter_results(db: Session, query: str, max_results: int, force_liv
         item["creator_id"] = creator.id
         upsert_content_item(db, item)
 
+    # LLM alignment scoring against tweets
+    alignment_score = 0.0
+    tweet_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
+    if tweet_texts:
+        try:
+            from src.analysis.nlp import score_text_content
+            align_result = score_text_content(tweet_texts, target_topic=query)
+            alignment_score = float(align_result.alignment_score)
+        except Exception as e:
+            logger.error("Twitter alignment scoring failed: %s", e)
+
     # Score
     from src.analysis.scoring import score_creator
     breakdown = score_creator(
         platform="twitter",
         bio=creator.bio or "",
         follower_count=profile.get("follower_count", 0),
+        alignment_score=alignment_score,
     )
     update_creator_scores(
         db, creator.id,
         credibility_score=breakdown.credibility_score,
         engagement_score=breakdown.engagement_score,
         reach_score=breakdown.reach_score,
+        alignment_score=alignment_score,
         composite_score=breakdown.composite_score,
     )
 
@@ -362,17 +417,30 @@ def _ingest_instagram_results(db: Session, query: str, max_results: int, force_l
         item["creator_id"] = creator.id
         upsert_content_item(db, item)
 
+    # LLM alignment scoring against Instagram posts
+    alignment_score = 0.0
+    post_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
+    if post_texts:
+        try:
+            from src.analysis.nlp import score_text_content
+            align_result = score_text_content(post_texts, target_topic=query)
+            alignment_score = float(align_result.alignment_score)
+        except Exception as e:
+            logger.error("Instagram alignment scoring failed: %s", e)
+
     from src.analysis.scoring import score_creator
     breakdown = score_creator(
         platform="instagram",
         bio=creator.bio or "",
         follower_count=profile.get("follower_count", 0),
+        alignment_score=alignment_score,
     )
     update_creator_scores(
         db, creator.id,
         credibility_score=breakdown.credibility_score,
         engagement_score=breakdown.engagement_score,
         reach_score=breakdown.reach_score,
+        alignment_score=alignment_score,
         composite_score=breakdown.composite_score,
     )
 

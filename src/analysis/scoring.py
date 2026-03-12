@@ -27,6 +27,23 @@ class ScoreWeights:
     alignment: float = 0.40
 
 
+def get_platform_weights(platform: str) -> ScoreWeights:
+    """Return scoring weights tuned for each platform.
+
+    Platforms without meaningful follower counts (academic, blog)
+    shift the reach weight into credibility and alignment.
+    """
+    p = platform.lower()
+    if p == "academic":
+        return ScoreWeights(credibility=0.35, engagement=0.20, reach=0.05, alignment=0.40)
+    if p == "blog":
+        return ScoreWeights(credibility=0.30, engagement=0.15, reach=0.05, alignment=0.50)
+    if p in ("twitter", "instagram"):
+        return ScoreWeights(credibility=0.20, engagement=0.25, reach=0.15, alignment=0.40)
+    # YouTube / default
+    return ScoreWeights()
+
+
 @dataclass
 class ScoreBreakdown:
     """Full scoring breakdown for a creator."""
@@ -140,7 +157,7 @@ def compute_engagement_score(
     return max(score, 5.0)
 
 
-def compute_reach_score(follower_count: int) -> float:
+def compute_reach_score(follower_count: int, platform: str = "") -> float:
     """Compute audience reach score (0-100) using log scaling.
 
     Log scale prevents mega-influencers from dominating:
@@ -149,8 +166,14 @@ def compute_reach_score(follower_count: int) -> float:
     - 100K → ~50
     - 1M → ~65
     - 10M → ~75
+
+    For platforms without meaningful follower counts (academic, blog),
+    returns a baseline score so their composite isn't penalized.
     """
     if follower_count <= 0:
+        # Academic and blog creators aren't penalized for having no followers
+        if platform.lower() in ("academic", "blog"):
+            return 40.0  # Neutral baseline
         return 0.0
 
     # log10(1000) = 3, log10(1M) = 6, log10(100M) = 8
@@ -253,7 +276,11 @@ def score_creator(
         platform=platform,
     )
 
-    reach = compute_reach_score(follower_count)
+    reach = compute_reach_score(follower_count, platform=platform)
+
+    # Use platform-specific weights if none provided
+    if weights is None:
+        weights = get_platform_weights(platform)
 
     return compute_composite_score(
         credibility_score=credibility,

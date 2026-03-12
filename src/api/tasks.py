@@ -10,32 +10,57 @@ from src.db.dao import update_briefing
 
 logger = logging.getLogger(__name__)
 
-BRIEFING_PROMPT_TEMPLATE = """You are a campaign strategist writing a one-page engagement briefing.
+BRIEFING_PROMPT_TEMPLATE = """You are preparing a polished, executive-level **Influencer Engagement Briefing** for an advocacy team.
 
-Based on the creator's metadata and content excerpts provided below, generate a professional, concise outreach cheat sheet.
+The team needs this briefing to evaluate whether to pursue a partnership with this creator. Write it as if you're presenting to a VP of Marketing.
 
-## Source Data
-- **Name:** {creator_name}
-- **Platform:** {platform}
-- **Followers/Reach:** {follower_count:,}
-- **Alignment Score:** {alignment_score}/100
-- **Campaign Topic:** {topic}
+---
 
-### Content Excerpts
+## Creator Intel
+
+| Field | Value |
+|-------|-------|
+| **Name** | {creator_name} |
+| **Platform** | {platform} |
+| **Audience** | {follower_count:,} |
+| **Alignment Score** | {alignment_score}/100 |
+| **Campaign Focus** | {topic} |
+
+### Content Samples
 {chunks_section}
 
 ---
 
-## Instructions
-Write the briefing in Markdown using specifically these 6 sections:
-1. **Creator Profile** — Summary of who they are and their content niche.
-2. **Mission Relevance** — Why this creator is a high-value/natural fit for the campaign topic "{topic}".
-3. **Key Topics** — The recurring themes in their content that align with our mission.
-4. **Metrics** — Highlight their subscriber/follower count and reach.
-5. **Example Content** — Cite specific quotes or excerpts provided above that demonstrate their alignment.
-6. **Suggested Talking Points** — 3-5 specific, natural hooks we can use for outreach.
+## Output Format
 
-Keep it professional, evidence-based, and exactly under one page (~400-500 words)."""
+Write an **engagement briefing** in polished Markdown using these sections. Use the exact headings below:
+
+### 🎯 Creator Snapshot
+A 2-3 sentence executive summary: who they are, why they matter, and their core content niche. Make this punchy and compelling.
+
+### 🔗 Mission Alignment
+A detailed paragraph explaining *exactly why* this creator is a natural fit for the campaign topic "{topic}". Reference specific content themes. Avoid generic statements — be precise about what makes them uniquely valuable.
+
+### 📊 Credibility & Reach Assessment
+Analyze their authority signals: platform presence, professional credentials, audience quality indicators, and any expertise markers visible in their content or bio.
+
+### 💡 Key Content Themes
+A bullet list of 4-6 recurring themes from their content that overlap with our advocacy goals. Each bullet should include a brief supporting observation.
+
+### 📝 Evidence & Quotes
+Cite 3-5 specific quotes, ideas, or content excerpts from the samples above. Format each as a blockquote with brief context.
+
+### 🤝 Outreach Strategy
+Provide 4-5 specific, actionable talking points for initial outreach. These should feel natural, reference their actual content, and avoid sounding transactional. Frame each as a conversation opener.
+
+---
+
+## Quality Guidelines
+- Write in a confident, professional tone suitable for a strategy presentation
+- Use specific evidence from the content samples — never make up quotes
+- Keep the total briefing between 500-700 words
+- Use Markdown formatting (headers, bold, bullet points, blockquotes) for readability
+- If content samples are limited, note this honestly rather than fabricating details"""
 
 
 def generate_briefing_task(
@@ -76,11 +101,11 @@ def generate_briefing_task(
 
             chunks_section = ""
             for i, item in enumerate(content_items, 1):
-                preview = item.text_content[:500] + "..." if len(item.text_content) > 500 else item.text_content
-                chunks_section += f"\n**Excerpt {i} ({item.source_type}):**\n> {preview}\n"
+                preview = item.text_content[:800] + "..." if len(item.text_content) > 800 else item.text_content
+                chunks_section += f"\n**Sample {i} — {item.source_type.replace('_', ' ').title()}** ({item.title or 'Untitled'}):\n> {preview}\n"
 
             if not chunks_section.strip():
-                chunks_section = "No aligned content excerpts available."
+                chunks_section = "_No content samples available. Base the briefing on the creator's profile metadata only._"
 
             prompt = BRIEFING_PROMPT_TEMPLATE.format(
                 creator_name=creator.name,
@@ -92,7 +117,7 @@ def generate_briefing_task(
             )
 
             if campaign_context:
-                prompt += f"\n\n**Additional Campaign Context:** {campaign_context}"
+                prompt += f"\n\n---\n**Additional Campaign Context from the team:** {campaign_context}"
 
             # Call Gemini
             print(f"[BRIEFING] Calling Gemini API...")
@@ -110,9 +135,9 @@ def generate_briefing_task(
                     types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
                 ],
                 config=types.GenerateContentConfig(
-                    system_instruction="You are a campaign strategist.",
-                    temperature=0.5,
-                    max_output_tokens=1500,
+                    system_instruction="You are a senior campaign strategist at a top advocacy organization. You write polished, evidence-based influencer engagement briefings that are used by leadership to make partnership decisions. Your writing is professional, specific, and persuasive.",
+                    temperature=0.4,
+                    max_output_tokens=2500,
                 ),
             )
             content = response.text
