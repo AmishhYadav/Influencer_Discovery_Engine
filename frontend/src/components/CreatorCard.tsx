@@ -1,6 +1,6 @@
 
 import type { CreatorSummary } from '../api/client';
-import { User, Twitter, Youtube, GraduationCap, PenTool, ExternalLink } from 'lucide-react';
+import { User, Twitter, Youtube, GraduationCap, PenTool, ExternalLink, Users, BarChart3, BookOpen, TrendingUp } from 'lucide-react';
 
 interface CreatorCardProps {
     creator: CreatorSummary;
@@ -13,6 +13,7 @@ const PlatformIcon = ({ platform }: { platform?: string }) => {
         case 'youtube': return <Youtube className="w-4 h-4 text-red-500" />;
         case 'academic': return <GraduationCap className="w-4 h-4 text-indigo-400" />;
         case 'blog': return <PenTool className="w-4 h-4 text-emerald-400" />;
+        case 'instagram': return <User className="w-4 h-4 text-pink-400" />;
         default: return <User className="w-4 h-4 text-slate-400" />;
     }
 };
@@ -23,7 +24,56 @@ const formatNumber = (num: number) => {
     return num.toString();
 };
 
+/** Returns the best metric to display based on the platform */
+function getPrimaryMetric(creator: CreatorSummary): { label: string; value: string; icon: React.ReactNode } {
+    const platform = (creator.platform || '').toLowerCase();
+
+    // Social platforms with meaningful follower counts
+    if (['youtube', 'twitter', 'instagram'].includes(platform) && (creator.follower_count ?? 0) > 0) {
+        return {
+            label: platform === 'youtube' ? 'Subscribers' : 'Followers',
+            value: formatNumber(creator.follower_count ?? 0),
+            icon: <Users className="w-3.5 h-3.5 text-cyan-400" />,
+        };
+    }
+
+    // Academic — show alignment score as "Research Relevance"
+    if (platform === 'academic') {
+        return {
+            label: 'Research Relevance',
+            value: `${Math.round(creator.composite_score ?? 0)}%`,
+            icon: <BookOpen className="w-3.5 h-3.5 text-indigo-400" />,
+        };
+    }
+
+    // Blog — show alignment score
+    if (platform === 'blog') {
+        return {
+            label: 'Content Alignment',
+            value: `${Math.round(creator.alignment_score ?? creator.composite_score ?? 0)}%`,
+            icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />,
+        };
+    }
+
+    // Fallback — show composite score
+    if ((creator.composite_score ?? 0) > 0) {
+        return {
+            label: 'Relevance Score',
+            value: `${Math.round(creator.composite_score ?? 0)}%`,
+            icon: <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />,
+        };
+    }
+
+    // Nothing meaningful to show
+    return {
+        label: 'Discovered',
+        value: '✓',
+        icon: <BarChart3 className="w-3.5 h-3.5 text-slate-500" />,
+    };
+}
+
 export function CreatorCard({ creator, onClick }: CreatorCardProps) {
+    const metric = getPrimaryMetric(creator);
 
     return (
         <div 
@@ -58,8 +108,11 @@ export function CreatorCard({ creator, onClick }: CreatorCardProps) {
 
             <div className="mt-6">
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-800/30 flex justify-between items-center">
-                    <span className="text-sm text-slate-400">Audience Size</span>
-                    <span className="font-semibold text-slate-200">{formatNumber(creator.follower_count)}</span>
+                    <div className="flex items-center gap-2">
+                        {metric.icon}
+                        <span className="text-sm text-slate-400">{metric.label}</span>
+                    </div>
+                    <span className="font-semibold text-slate-200">{metric.value}</span>
                 </div>
             </div>
         </div>
