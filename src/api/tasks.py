@@ -52,12 +52,16 @@ def generate_briefing_task(
     engine = create_engine(db_url, echo=False)
 
     try:
+        print(f"[BRIEFING] Starting generation for briefing={briefing_id}, creator={creator_id}")
         with Session(engine) as session:
             creator = session.get(Creator, creator_id)
             if creator is None:
+                print(f"[BRIEFING] ERROR: Creator {creator_id} not found in DB")
                 update_briefing(session, briefing_id, "Creator not found", "failed")
                 session.commit()
                 return
+
+            print(f"[BRIEFING] Found creator: {creator.name} ({creator.platform})")
 
             # Grab their recent content items to feed the LLM
             content_items = (
@@ -67,6 +71,8 @@ def generate_briefing_task(
                 .limit(5)
                 .all()
             )
+
+            print(f"[BRIEFING] Found {len(content_items)} content items")
 
             chunks_section = ""
             for i, item in enumerate(content_items, 1):
@@ -89,10 +95,15 @@ def generate_briefing_task(
                 prompt += f"\n\n**Additional Campaign Context:** {campaign_context}"
 
             # Call Gemini
+            print(f"[BRIEFING] Calling Gemini API...")
             from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY environment variable is not set!")
+
+            client = genai.Client(api_key=api_key)
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=[
@@ -105,16 +116,21 @@ def generate_briefing_task(
                 ),
             )
             content = response.text
+            print(f"[BRIEFING] ✅ Gemini responded with {len(content)} chars")
 
             update_briefing(session, briefing_id, content, "completed")
             session.commit()
+            print(f"[BRIEFING] ✅ Briefing {briefing_id} saved as 'completed'")
             logger.info("Briefing %s completed for creator %s", briefing_id, creator_id)
 
     except Exception as e:
-        logger.error("Briefing generation failed: %s", e)
+        print(f"[BRIEFING] ❌ FAILED: {e}")
+        logger.error("Briefing generation failed: %s", e, exc_info=True)
         try:
             with Session(engine) as session:
                 update_briefing(session, briefing_id, str(e), "failed")
                 session.commit()
-        except Exception:
+                print(f"[BRIEFING] Marked briefing {briefing_id} as 'failed'")
+        except Exception as e2:
+            print(f"[BRIEFING] ❌ Could not even mark as failed: {e2}")
             logger.exception("Failed to update briefing status")

@@ -7,7 +7,7 @@ from src.api.deps import get_db, DATABASE_URL
 from src.api.schemas import BriefingRequest, BriefingResponse, BriefingAcceptedResponse
 from src.api.tasks import generate_briefing_task
 from src.db.dao import create_briefing, get_briefing
-from src.db.models import Creator
+from src.db.models import Creator, Briefing
 
 router = APIRouter(prefix="/api/briefings", tags=["briefings"])
 
@@ -42,6 +42,7 @@ def trigger_briefing(
 
 @router.get("/debug")
 def debug_briefings(db: Session = Depends(get_db)):
+    """Debug endpoint to see recent briefings and their statuses."""
     briefings = db.query(Briefing).order_by(Briefing.created_at.desc()).limit(5).all()
     return [{"id": b.id, "status": b.status, "content": b.content} for b in briefings]
 
