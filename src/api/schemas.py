@@ -136,6 +136,7 @@ class SearchRequest(BaseModel):
     query: str
     sources: list[str] = ["youtube", "blog", "academic"]
     max_results: int = 10
+    force_live: bool = False
 
 
 class SearchResponse(BaseModel):
@@ -144,3 +145,4 @@ class SearchResponse(BaseModel):
     total: int
     query: str
     sources: list[str]
+    from_cache: bool = False

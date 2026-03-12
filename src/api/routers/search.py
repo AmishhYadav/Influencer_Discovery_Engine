@@ -42,20 +42,22 @@ def search_creators(
     returns discovered creators.
     """
     all_creators = []
+    served_from_cache = False
 
     for source in request.sources:
         try:
             if source == "blog":
-                creators = _ingest_blog_results(db, request.query, request.max_results)
+                creators = _ingest_blog_results(db, request.query, request.max_results, force_live=request.force_live)
             elif source == "academic":
-                creators = _ingest_academic_results(db, request.query, request.max_results)
+                creators = _ingest_academic_results(db, request.query, request.max_results, force_live=request.force_live)
             elif source == "twitter":
-                creators = _ingest_twitter_results(db, request.query, request.max_results)
+                creators = _ingest_twitter_results(db, request.query, request.max_results, force_live=request.force_live)
             elif source == "instagram":
-                creators = _ingest_instagram_results(db, request.query, request.max_results)
+                creators = _ingest_instagram_results(db, request.query, request.max_results, force_live=request.force_live)
             elif source == "youtube":
-                # YouTube uses the existing pipeline — just return existing results
-                creators = _get_youtube_creators(db, request.query, request.max_results)
+                creators, was_cached = _get_youtube_creators(db, request.query, request.max_results, force_live=request.force_live)
+                if was_cached:
+                    served_from_cache = True
             else:
                 continue
             all_creators.extend(creators)
@@ -69,6 +71,7 @@ def search_creators(
         total=len(all_creators),
         query=request.query,
         sources=request.sources,
+        from_cache=served_from_cache,
     )
 
 
@@ -139,7 +142,7 @@ def get_multi_creator_detail(
 
 # ── Source-Specific Ingestors ────────────────────────────────────────────
 
-def _ingest_blog_results(db: Session, query: str, max_results: int) -> list[Creator]:
+def _ingest_blog_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
     """Search for blogs related to the query and ingest articles."""
     from src.db.models import Creator
     from src.ingestion.blog_scraper import scrape_blog
@@ -153,7 +156,7 @@ def _ingest_blog_results(db: Session, query: str, max_results: int) -> list[Crea
             Creator.platform_id == query
         ).all()
 
-        if existing:
+        if existing and not force_live:
             logger.info(f"Returning local DB hit for Blog URL '{query}'")
             return existing
 
@@ -196,7 +199,7 @@ def _ingest_blog_results(db: Session, query: str, max_results: int) -> list[Crea
     return []
 
 
-def _ingest_academic_results(db: Session, query: str, max_results: int) -> list[Creator]:
+def _ingest_academic_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
     """Search academic databases and create creator records for authors."""
     from src.db.models import Creator
     from src.ingestion.academic import search_academic, extract_academic_creators
@@ -209,7 +212,7 @@ def _ingest_academic_results(db: Session, query: str, max_results: int) -> list[
             (Creator.bio.ilike(f"%{query}%"))
         )
     existing = db_query.limit(max_results).all()
-    if existing and (not query or len(existing) >= min(max_results, 2)):
+    if existing and (not query or len(existing) >= min(max_results, 2)) and not force_live:
         logger.info(f"Returning {len(existing)} local DB hits for academic query '{query}'")
         return existing
 
@@ -266,7 +269,7 @@ def _ingest_academic_results(db: Session, query: str, max_results: int) -> list[
     return creators
 
 
-def _ingest_twitter_results(db: Session, query: str, max_results: int) -> list[Creator]:
+def _ingest_twitter_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
     """Scrape Twitter profile and create creator record."""
     from src.db.models import Creator
     from src.ingestion.social_media import scrape_twitter_profile, normalize_social_content
@@ -279,7 +282,7 @@ def _ingest_twitter_results(db: Session, query: str, max_results: int) -> list[C
         (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
     ).first()
 
-    if existing:
+    if existing and not force_live:
         logger.info(f"Returning local DB hit for Twitter handle '{handle}'")
         return [existing]
 
@@ -322,7 +325,7 @@ def _ingest_twitter_results(db: Session, query: str, max_results: int) -> list[C
     return [creator]
 
 
-def _ingest_instagram_results(db: Session, query: str, max_results: int) -> list[Creator]:
+def _ingest_instagram_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
     """Scrape Instagram profile and create creator record."""
     from src.db.models import Creator
     from src.ingestion.social_media import scrape_instagram_profile, normalize_social_content
@@ -335,7 +338,7 @@ def _ingest_instagram_results(db: Session, query: str, max_results: int) -> list
         (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
     ).first()
 
-    if existing:
+    if existing and not force_live:
         logger.info(f"Returning local DB hit for Instagram handle '{handle}'")
         return [existing]
 
@@ -376,30 +379,32 @@ def _ingest_instagram_results(db: Session, query: str, max_results: int) -> list
     return [creator]
 
 
-def _get_youtube_creators(db: Session, query: str, max_results: int) -> list[Creator]:
+def _get_youtube_creators(db: Session, query: str, max_results: int, force_live: bool = False) -> tuple[list[Creator], bool]:
     """Search for YouTube channels matching the query, fetch transcripts, and score.
     
+    Returns a tuple of (creators, from_cache).
     If query is empty (e.g. dashboard load bootstrap), bypasses the live API and returns existing DB records.
-    If query matches existing channels in the DB, return those first to save API quota & time.
+    If query matches existing creators in the DB (>= 3 matches), return those first to save API quota & time.
+    If force_live is True, always skip the cache and hit the YouTube API.
     """
     from src.db.models import Creator
     
-    # 1. Check local DB first
-    db_query = db.query(Creator).filter(Creator.platform == "youtube").order_by(desc(Creator.composite_score))
-    
-    if query:
-        # Search for query in name or bio
-        db_query = db_query.filter(
-            (Creator.name.ilike(f"%{query}%")) | 
-            (Creator.bio.ilike(f"%{query}%"))
-        )
+    if not force_live:
+        # 1. Check local DB first
+        db_query = db.query(Creator).filter(Creator.platform == "youtube").order_by(desc(Creator.composite_score))
         
-    creators = db_query.limit(max_results).all()
-    
-    # If we found enough creators locally (or it's a bootstrap empty query), return them!
-    if creators and (not query or len(creators) >= min(max_results, 3)):
-        logger.info(f"Returning {len(creators)} local DB hits for query '{query}'")
-        return creators
+        if query:
+            db_query = db_query.filter(
+                (Creator.name.ilike(f"%{query}%")) | 
+                (Creator.bio.ilike(f"%{query}%"))
+            )
+            
+        cached_creators = db_query.limit(max_results).all()
+        
+        # If we found enough creators locally (>= 3 or bootstrap empty query), return them!
+        if cached_creators and (not query or len(cached_creators) >= 3):
+            logger.info(f"Returning {len(cached_creators)} local DB hits for query '{query}'")
+            return cached_creators, True
 
     # 2. Active Live Search (Fallback for new queries)
     logger.info(f"No local matches found for '{query}'. Hitting YouTube API...")
@@ -492,4 +497,4 @@ def _get_youtube_creators(db: Session, query: str, max_results: int) -> list[Cre
         creators.append(creator)
 
     db.commit()
-    return creators
+    return creators, False

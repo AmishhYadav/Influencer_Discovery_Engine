@@ -46,6 +46,7 @@ export interface SearchResponse {
     total: number;
     query: string;
     sources: string[];
+    from_cache: boolean;
 }
 
 export interface CreatorListResponse {
@@ -75,13 +76,13 @@ export interface BriefingResponse {
 
 
 export const apiClient = {
-    async searchCreators(query: string, sources: string[]): Promise<SearchResponse> {
+    async searchCreators(query: string, sources: string[], forceLive: boolean = false): Promise<SearchResponse> {
         const response = await fetch(`${API_BASE_URL}/search`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ query, sources, max_results: 10 }),
+            body: JSON.stringify({ query, sources, max_results: 10, force_live: forceLive }),
         });
 
         if (!response.ok) {

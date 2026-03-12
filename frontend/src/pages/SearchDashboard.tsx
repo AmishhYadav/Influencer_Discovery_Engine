@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { CreatorCard } from '../components/CreatorCard';
 import { apiClient, type CreatorSummary } from '../api/client';
-import { Search, Loader2, Filter } from 'lucide-react';
+import { Search, Loader2, Filter, Database, Wifi } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ALL_SOURCES = ['youtube', 'twitter', 'blog', 'academic', 'instagram'];
@@ -15,10 +15,10 @@ export default function SearchDashboard() {
     const [creators, setCreators] = useState<CreatorSummary[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
     const [hasSearched, setHasSearched] = useState(false);
+    const [fromCache, setFromCache] = useState(false);
 
-    const handleSearch = async (e?: React.FormEvent) => {
+    const handleSearch = async (e?: React.FormEvent, forceLive: boolean = false) => {
         if (e) e.preventDefault();
         if (!query.trim()) return;
 
@@ -31,14 +31,20 @@ export default function SearchDashboard() {
             setIsLoading(true);
             setError(null);
             setHasSearched(true);
-            const res = await apiClient.searchCreators(query, selectedSources);
+            setFromCache(false);
+            const res = await apiClient.searchCreators(query, selectedSources, forceLive);
             setCreators(res.creators);
+            setFromCache(res.from_cache);
         } catch (err: any) {
             console.error(err);
             setError(err.message || 'An error occurred during search. Ensure your API is running.');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleForceLiveSearch = () => {
+        handleSearch(undefined, true);
     };
 
     const toggleSource = (source: string) => {
@@ -59,7 +65,7 @@ export default function SearchDashboard() {
 
                 {/* Search Bar & Filters */}
                 <div className="bg-[#0B101E]/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 shadow-2xl relative z-20">
-                    <form onSubmit={handleSearch} className="flex gap-4 mb-5">
+                    <form onSubmit={(e) => handleSearch(e)} className="flex gap-4 mb-5">
                         <div className="relative flex-1">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                 <Search className="h-5 w-5 text-slate-400" />
@@ -111,6 +117,29 @@ export default function SearchDashboard() {
                         <div className="w-2 h-2 rounded-full bg-red-500"></div>
                         <p className="text-sm font-medium">{error}</p>
                     </div>
+                )}
+
+                {/* Cache Indicator Banner */}
+                {fromCache && !isLoading && creators.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-5 py-3 flex items-center justify-between"
+                    >
+                        <div className="flex items-center gap-3">
+                            <Database className="w-4 h-4 text-emerald-400" />
+                            <span className="text-sm text-emerald-300 font-medium">
+                                Showing {creators.length} results from your database (instant)
+                            </span>
+                        </div>
+                        <button
+                            onClick={handleForceLiveSearch}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded-lg text-sm font-medium border border-cyan-500/30 hover:border-cyan-500/60 transition-all"
+                        >
+                            <Wifi className="w-3.5 h-3.5" />
+                            Refresh with Live Search
+                        </button>
+                    </motion.div>
                 )}
                 
                 {isLoading && creators.length === 0 && (
