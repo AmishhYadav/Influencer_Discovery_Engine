@@ -56,52 +56,33 @@
 
 ## 🏗 System Architecture
 
-```mermaid
-graph TB
-    subgraph Frontend["🖥️ Frontend — React + Vite"]
-        LP[Landing Page]
-        SD[Search Dashboard]
-        AD[Analytics Dashboard]
-        BD[Briefings Dashboard]
-    end
-
-    subgraph API["⚡ FastAPI Backend"]
-        SR[Search Router]
-        CR[Creators Router]
-        BR[Briefings Router]
-        BT[Background Tasks]
-    end
-
-    subgraph Ingestion["📥 Ingestion Layer"]
-        YT[YouTube API]
-        TW[Twitter Scraper]
-        IG[Instagram Scraper]
-        BL[Blog Scraper]
-        AC[Academic Search]
-        WD[Web Discovery]
-    end
-
-    subgraph Analysis["🧠 Analysis Engine"]
-        NLP[Gemini LLM Scoring]
-        SC[Composite Scorer]
-        CH[Text Chunker]
-        EMB[Embeddings]
-    end
-
-    subgraph Storage["💾 Storage"]
-        PG[(PostgreSQL)]
-        PGV[(pgvector)]
-    end
-
-    Frontend -->|REST API| API
-    SR --> Ingestion
-    SR --> Analysis
-    BR --> BT
-    BT -->|Gemini API| NLP
-    Ingestion --> PG
-    Analysis --> PG
-    NLP --> EMB --> PGV
-    WD -->|Google Search| TW & IG & BL
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        Frontend (React + Vite)                          │
+│          Landing Page · Search · Analytics · Briefings                  │
+└─────────────────────────────┬────────────────────────────────────────────┘
+                              │ REST API
+┌─────────────────────────────▼────────────────────────────────────────────┐
+│                         FastAPI Backend                                  │
+│  ┌──────────────┐   ┌────────────────┐   ┌───────────────────────────┐  │
+│  │ Search Router │   │ Creators Router│   │ Briefings Router + Tasks  │  │
+│  └──────┬───────┘   └────────┬───────┘   └─────────────┬─────────────┘  │
+│         │                    │                          │                │
+│  ┌──────▼────────────────────▼──────────────────────────▼─────────────┐  │
+│  │                      Ingestion Layer                               │  │
+│  │   YouTube API · Twitter · Instagram · Blog · Academic · Discovery  │  │
+│  └──────────────────────────┬────────────────────────────────────────┘  │
+│                             │                                           │
+│  ┌──────────────────────────▼────────────────────────────────────────┐  │
+│  │                      Analysis Engine                              │  │
+│  │        Gemini LLM Scoring · Composite Scorer · Embeddings         │  │
+│  └──────────────────────────┬────────────────────────────────────────┘  │
+└─────────────────────────────┼────────────────────────────────────────────┘
+                              │
+                 ┌────────────▼────────────┐
+                 │   PostgreSQL + pgvector  │
+                 │  Creators · Content · AI │
+                 └─────────────────────────┘
 ```
 
 ---
