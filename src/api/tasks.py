@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from src.db.models import Creator, ContentItem, create_tables
+from src.db.models import Creator, ContentItem
 from src.db.dao import update_briefing
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,6 @@ def generate_briefing_task(
     This runs asynchronously via FastAPI BackgroundTasks.
     """
     engine = create_engine(db_url, echo=False)
-    create_tables(engine)
 
     try:
         with Session(engine) as session:

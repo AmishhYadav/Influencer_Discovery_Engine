@@ -56,7 +56,7 @@ export default function BriefingsDashboard() {
                         setIsGenerating(false);
                         clearInterval(pinger);
                         if (statusRes.status === 'failed') {
-                            setError('Briefing generation failed.');
+                            setError(`Briefing generation failed. ${statusRes.content ? `Error: ${statusRes.content}` : ''}`);
                         }
                     }
                 }

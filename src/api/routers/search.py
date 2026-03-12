@@ -141,11 +141,23 @@ def get_multi_creator_detail(
 
 def _ingest_blog_results(db: Session, query: str, max_results: int) -> list[Creator]:
     """Search for blogs related to the query and ingest articles."""
+    from src.db.models import Creator
     from src.ingestion.blog_scraper import scrape_blog
 
     # Use the query as a blog URL hint — users can pass blog URLs directly
     # For keyword queries, this won't find results (expected)
     if query.startswith("http"):
+        # 1. Check local DB first
+        existing = db.query(Creator).filter(
+            Creator.platform == "blog",
+            Creator.platform_id == query
+        ).all()
+
+        if existing:
+            logger.info(f"Returning local DB hit for Blog URL '{query}'")
+            return existing
+
+        # 2. Live Search
         articles = scrape_blog(query, max_posts=max_results)
         if not articles:
             return []
@@ -186,8 +198,22 @@ def _ingest_blog_results(db: Session, query: str, max_results: int) -> list[Crea
 
 def _ingest_academic_results(db: Session, query: str, max_results: int) -> list[Creator]:
     """Search academic databases and create creator records for authors."""
+    from src.db.models import Creator
     from src.ingestion.academic import search_academic, extract_academic_creators
 
+    # 1. Check local DB first
+    db_query = db.query(Creator).filter(Creator.platform == "academic")
+    if query:
+        db_query = db_query.filter(
+            (Creator.name.ilike(f"%{query}%")) | 
+            (Creator.bio.ilike(f"%{query}%"))
+        )
+    existing = db_query.limit(max_results).all()
+    if existing and (not query or len(existing) >= min(max_results, 2)):
+        logger.info(f"Returning {len(existing)} local DB hits for academic query '{query}'")
+        return existing
+
+    # 2. Live Search
     papers = search_academic(query, limit=max_results)
     if not papers:
         return []
@@ -242,10 +268,22 @@ def _ingest_academic_results(db: Session, query: str, max_results: int) -> list[
 
 def _ingest_twitter_results(db: Session, query: str, max_results: int) -> list[Creator]:
     """Scrape Twitter profile and create creator record."""
+    from src.db.models import Creator
     from src.ingestion.social_media import scrape_twitter_profile, normalize_social_content
 
-    # Query should be a Twitter handle
     handle = query.lstrip("@").split("/")[-1]
+
+    # 1. Check local DB first
+    existing = db.query(Creator).filter(
+        Creator.platform == "twitter",
+        (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
+    ).first()
+
+    if existing:
+        logger.info(f"Returning local DB hit for Twitter handle '{handle}'")
+        return [existing]
+
+    # 2. Live Search
     profile = scrape_twitter_profile(handle)
 
     if not profile:
@@ -286,9 +324,22 @@ def _ingest_twitter_results(db: Session, query: str, max_results: int) -> list[C
 
 def _ingest_instagram_results(db: Session, query: str, max_results: int) -> list[Creator]:
     """Scrape Instagram profile and create creator record."""
+    from src.db.models import Creator
     from src.ingestion.social_media import scrape_instagram_profile, normalize_social_content
 
     handle = query.lstrip("@").split("/")[-1]
+
+    # 1. Check local DB first
+    existing = db.query(Creator).filter(
+        Creator.platform == "instagram",
+        (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
+    ).first()
+
+    if existing:
+        logger.info(f"Returning local DB hit for Instagram handle '{handle}'")
+        return [existing]
+
+    # 2. Live search
     profile = scrape_instagram_profile(handle)
 
     if not profile:
@@ -331,50 +382,22 @@ def _get_youtube_creators(db: Session, query: str, max_results: int) -> list[Cre
     If query is empty (e.g. dashboard load bootstrap), bypasses the live API and returns existing DB records.
     If query matches existing channels in the DB, return those first to save API quota & time.
     """
-    from src.db.models import Channel
+    from src.db.models import Creator
     
     # 1. Check local DB first
-    db_query = db.query(Channel).order_by(desc(Channel.alignment_score))
+    db_query = db.query(Creator).filter(Creator.platform == "youtube").order_by(desc(Creator.composite_score))
     
     if query:
-        # Search for query in title or description
+        # Search for query in name or bio
         db_query = db_query.filter(
-            (Channel.title.ilike(f"%{query}%")) | 
-            (Channel.description.ilike(f"%{query}%"))
+            (Creator.name.ilike(f"%{query}%")) | 
+            (Creator.bio.ilike(f"%{query}%"))
         )
         
-    channels = db_query.limit(max_results).all()
+    creators = db_query.limit(max_results).all()
     
-    # If we found enough channels locally (or it's a bootstrap empty query), return them!
-    if channels and (not query or len(channels) >= min(max_results, 3)):
-        creators = []
-        for ch in channels:
-            creator = upsert_creator(db, {
-                "name": ch.title,
-                "platform": "youtube",
-                "platform_id": ch.id,
-                "profile_url": f"https://youtube.com/channel/{ch.id}",
-                "bio": ch.description or "",
-                "follower_count": ch.subscriber_count or 0,
-            })
-            if ch.alignment_score is not None:
-                from src.analysis.scoring import score_creator
-                breakdown = score_creator(
-                    platform="youtube",
-                    bio=ch.description or "",
-                    follower_count=ch.subscriber_count or 0,
-                    alignment_score=float(ch.alignment_score),
-                )
-                update_creator_scores(
-                    db, creator.id,
-                    credibility_score=breakdown.credibility_score,
-                    engagement_score=breakdown.engagement_score,
-                    reach_score=breakdown.reach_score,
-                    alignment_score=float(ch.alignment_score),
-                    composite_score=breakdown.composite_score,
-                )
-            creators.append(creator)
-        db.commit()
+    # If we found enough creators locally (or it's a bootstrap empty query), return them!
+    if creators and (not query or len(creators) >= min(max_results, 3)):
         logger.info(f"Returning {len(creators)} local DB hits for query '{query}'")
         return creators
 

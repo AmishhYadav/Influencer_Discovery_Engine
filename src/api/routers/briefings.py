@@ -40,6 +40,12 @@ def trigger_briefing(
     return BriefingAcceptedResponse(briefing_id=briefing.id)
 
 
+@router.get("/debug")
+def debug_briefings(db: Session = Depends(get_db)):
+    briefings = db.query(Briefing).order_by(Briefing.created_at.desc()).limit(5).all()
+    return [{"id": b.id, "status": b.status, "content": b.content} for b in briefings]
+
+
 @router.get("/{briefing_id}", response_model=BriefingResponse)
 def get_briefing_endpoint(briefing_id: str, db: Session = Depends(get_db)):
     """Retrieve a briefing by ID."""
