@@ -129,7 +129,7 @@ export default function SearchDashboard() {
                         <div className="flex items-center gap-3">
                             <Database className="w-4 h-4 text-emerald-400" />
                             <span className="text-sm text-emerald-300 font-medium">
-                                Showing {creators.length} results from your database (instant)
+                                Showing {creators.length} results from your database
                             </span>
                         </div>
                         <button

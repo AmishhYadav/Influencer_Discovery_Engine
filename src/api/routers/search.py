@@ -143,89 +143,108 @@ def get_multi_creator_detail(
 # ── Source-Specific Ingestors ────────────────────────────────────────────
 
 def _ingest_blog_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
-    """Search for blogs related to the query and ingest articles."""
+    """Search for blogs related to the query and ingest articles.
+    
+    Supports both direct URLs (http://...) and keyword queries.
+    For keyword queries, uses Google search to discover relevant blog URLs.
+    """
     from src.db.models import Creator
     from src.ingestion.blog_scraper import scrape_blog
 
-    # Use the query as a blog URL hint — users can pass blog URLs directly
-    # For keyword queries, this won't find results (expected)
+    # Determine which URLs to scrape
     if query.startswith("http"):
-        # 1. Check local DB first
-        existing = db.query(Creator).filter(
-            Creator.platform == "blog",
-            Creator.platform_id == query
-        ).all()
+        blog_urls = [query]
+    else:
+        # Check DB first for keyword queries
+        if not force_live:
+            existing = db.query(Creator).filter(
+                Creator.platform == "blog",
+                (Creator.name.ilike(f"%{query}%")) | (Creator.bio.ilike(f"%{query}%"))
+            ).limit(max_results).all()
+            if len(existing) >= 3:
+                logger.info(f"Returning {len(existing)} local DB hits for blog query '{query}'")
+                return existing
 
-        if existing and not force_live:
-            logger.info(f"Returning local DB hit for Blog URL '{query}'")
-            return existing
-
-        # 2. Live Search
-        articles = scrape_blog(query, max_posts=max_results)
-        if not articles:
+        # Discover blog URLs from keyword query
+        from src.ingestion.web_discovery import discover_blog_urls
+        blog_urls = discover_blog_urls(query, max_results=min(max_results, 5))
+        if not blog_urls:
+            logger.info(f"No blog URLs discovered for query '{query}'")
             return []
 
-        # Group articles by author
-        author_map: dict[str, list] = {}
-        for article in articles:
-            author = article.get("author", "Unknown Author")
-            if author not in author_map:
-                author_map[author] = []
-            author_map[author].append(article)
+    all_creators = []
 
-        creators = []
-        for author_name, author_articles in author_map.items():
-            creator = upsert_creator(db, {
-                "name": author_name,
-                "platform": "blog",
-                "platform_id": query,
-                "profile_url": query,
-                "bio": "",
-            })
+    for blog_url in blog_urls:
+        try:
+            articles = scrape_blog(blog_url, max_posts=3)
+            if not articles:
+                continue
 
-            content_texts = []
-            for article in author_articles:
-                upsert_content_item(db, {
-                    "creator_id": creator.id,
-                    "source_type": "blog_post",
-                    "title": article.get("title", ""),
-                    "text_content": article.get("text_content", ""),
-                    "url": article.get("url", ""),
-                    "published_at": article.get("published_at", ""),
+            # Group articles by author
+            author_map: dict[str, list] = {}
+            for article in articles:
+                author = article.get("author", "Unknown Author")
+                if author not in author_map:
+                    author_map[author] = []
+                author_map[author].append(article)
+
+            for author_name, author_articles in author_map.items():
+                creator = upsert_creator(db, {
+                    "name": author_name,
+                    "platform": "blog",
+                    "platform_id": blog_url,
+                    "profile_url": blog_url,
+                    "bio": "",
                 })
-                if article.get("text_content"):
-                    content_texts.append(article["text_content"])
 
-            # LLM alignment scoring against the blog content
-            alignment_score = 0.0
-            if content_texts:
-                try:
-                    from src.analysis.nlp import score_text_content
-                    align_result = score_text_content(content_texts, target_topic=query)
-                    alignment_score = float(align_result.alignment_score)
-                except Exception as e:
-                    logger.error("Blog alignment scoring failed: %s", e)
+                content_texts = []
+                for article in author_articles:
+                    upsert_content_item(db, {
+                        "creator_id": creator.id,
+                        "source_type": "blog_post",
+                        "title": article.get("title", ""),
+                        "text_content": article.get("text_content", ""),
+                        "url": article.get("url", ""),
+                        "published_at": article.get("published_at", ""),
+                    })
+                    if article.get("text_content"):
+                        content_texts.append(article["text_content"])
 
-            from src.analysis.scoring import score_creator
-            breakdown = score_creator(
-                platform="blog",
-                bio=creator.bio or "",
-                follower_count=0,
-                alignment_score=alignment_score,
-            )
-            update_creator_scores(
-                db, creator.id,
-                credibility_score=breakdown.credibility_score,
-                engagement_score=breakdown.engagement_score,
-                reach_score=breakdown.reach_score,
-                alignment_score=alignment_score,
-                composite_score=breakdown.composite_score,
-            )
+                # LLM alignment scoring
+                alignment_score = 0.0
+                if content_texts:
+                    try:
+                        from src.analysis.nlp import score_text_content
+                        align_result = score_text_content(content_texts, target_topic=query)
+                        alignment_score = float(align_result.alignment_score)
+                    except Exception as e:
+                        logger.error("Blog alignment scoring failed: %s", e)
 
-            creators.append(creator)
-        return creators
+                from src.analysis.scoring import score_creator
+                breakdown = score_creator(
+                    platform="blog",
+                    bio=creator.bio or "",
+                    follower_count=0,
+                    alignment_score=alignment_score,
+                )
+                update_creator_scores(
+                    db, creator.id,
+                    credibility_score=breakdown.credibility_score,
+                    engagement_score=breakdown.engagement_score,
+                    reach_score=breakdown.reach_score,
+                    alignment_score=alignment_score,
+                    composite_score=breakdown.composite_score,
+                )
 
-    return []
+                all_creators.append(creator)
+
+                if len(all_creators) >= max_results:
+                    return all_creators
+        except Exception as e:
+            logger.error("Blog scraping failed for %s: %s", blog_url, e)
+            continue
+
+    return all_creators
 
 
 def _ingest_academic_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
@@ -312,139 +331,200 @@ def _ingest_academic_results(db: Session, query: str, max_results: int, force_li
 
 
 def _ingest_twitter_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
-    """Scrape Twitter profile and create creator record."""
+    """Scrape Twitter profiles and create creator records.
+    
+    Supports both direct handles (@username) and keyword queries.
+    For keyword queries, uses Google search to discover relevant Twitter handles.
+    """
     from src.db.models import Creator
     from src.ingestion.social_media import scrape_twitter_profile, normalize_social_content
 
-    handle = query.lstrip("@").split("/")[-1]
+    # Determine handles to scrape
+    if query.startswith("@") or "/" in query:
+        # Direct handle query
+        handles = [query.lstrip("@").split("/")[-1]]
+    else:
+        # Check DB first for keyword queries
+        if not force_live:
+            existing = db.query(Creator).filter(
+                Creator.platform == "twitter",
+                (Creator.name.ilike(f"%{query}%")) | (Creator.bio.ilike(f"%{query}%"))
+            ).limit(max_results).all()
+            if len(existing) >= 3:
+                logger.info(f"Returning {len(existing)} local DB hits for Twitter query '{query}'")
+                return existing
 
-    # 1. Check local DB first
-    existing = db.query(Creator).filter(
-        Creator.platform == "twitter",
-        (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
-    ).first()
+        # Discover handles from keyword query
+        from src.ingestion.web_discovery import discover_twitter_handles
+        handles = discover_twitter_handles(query, max_results=max_results)
+        if not handles:
+            # Fallback: try the query as a handle
+            handles = [query.lstrip("@").split("/")[-1]]
 
-    if existing and not force_live:
-        logger.info(f"Returning local DB hit for Twitter handle '{handle}'")
-        return [existing]
-
-    # 2. Live Search
-    profile = scrape_twitter_profile(handle)
-
-    if not profile:
-        return []
-
-    creator = upsert_creator(db, {
-        "name": profile.get("name", handle),
-        "platform": "twitter",
-        "platform_id": handle,
-        "profile_url": profile.get("profile_url", ""),
-        "bio": profile.get("bio", ""),
-        "follower_count": profile.get("follower_count", 0),
-    })
-
-    # Store tweets as content items
-    content_items = normalize_social_content(profile)
-    for item in content_items:
-        item["creator_id"] = creator.id
-        upsert_content_item(db, item)
-
-    # LLM alignment scoring against tweets
-    alignment_score = 0.0
-    tweet_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
-    if tweet_texts:
+    all_creators = []
+    for handle in handles:
         try:
-            from src.analysis.nlp import score_text_content
-            align_result = score_text_content(tweet_texts, target_topic=query)
-            alignment_score = float(align_result.alignment_score)
+            # Check if this specific handle exists in DB
+            existing = db.query(Creator).filter(
+                Creator.platform == "twitter",
+                Creator.platform_id.ilike(handle)
+            ).first()
+
+            if existing and not force_live:
+                all_creators.append(existing)
+                continue
+
+            profile = scrape_twitter_profile(handle)
+            if not profile:
+                continue
+
+            creator = upsert_creator(db, {
+                "name": profile.get("name", handle),
+                "platform": "twitter",
+                "platform_id": handle,
+                "profile_url": profile.get("profile_url", ""),
+                "bio": profile.get("bio", ""),
+                "follower_count": profile.get("follower_count", 0),
+            })
+
+            content_items = normalize_social_content(profile)
+            for item in content_items:
+                item["creator_id"] = creator.id
+                upsert_content_item(db, item)
+
+            # LLM alignment scoring
+            alignment_score = 0.0
+            tweet_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
+            if tweet_texts:
+                try:
+                    from src.analysis.nlp import score_text_content
+                    align_result = score_text_content(tweet_texts, target_topic=query)
+                    alignment_score = float(align_result.alignment_score)
+                except Exception as e:
+                    logger.error("Twitter alignment scoring failed for %s: %s", handle, e)
+
+            from src.analysis.scoring import score_creator
+            breakdown = score_creator(
+                platform="twitter",
+                bio=creator.bio or "",
+                follower_count=profile.get("follower_count", 0),
+                alignment_score=alignment_score,
+            )
+            update_creator_scores(
+                db, creator.id,
+                credibility_score=breakdown.credibility_score,
+                engagement_score=breakdown.engagement_score,
+                reach_score=breakdown.reach_score,
+                alignment_score=alignment_score,
+                composite_score=breakdown.composite_score,
+            )
+
+            all_creators.append(creator)
+
+            if len(all_creators) >= max_results:
+                break
         except Exception as e:
-            logger.error("Twitter alignment scoring failed: %s", e)
+            logger.error("Twitter scraping failed for %s: %s", handle, e)
+            continue
 
-    # Score
-    from src.analysis.scoring import score_creator
-    breakdown = score_creator(
-        platform="twitter",
-        bio=creator.bio or "",
-        follower_count=profile.get("follower_count", 0),
-        alignment_score=alignment_score,
-    )
-    update_creator_scores(
-        db, creator.id,
-        credibility_score=breakdown.credibility_score,
-        engagement_score=breakdown.engagement_score,
-        reach_score=breakdown.reach_score,
-        alignment_score=alignment_score,
-        composite_score=breakdown.composite_score,
-    )
-
-    return [creator]
+    return all_creators
 
 
 def _ingest_instagram_results(db: Session, query: str, max_results: int, force_live: bool = False) -> list[Creator]:
-    """Scrape Instagram profile and create creator record."""
+    """Scrape Instagram profiles and create creator records.
+    
+    Supports both direct handles (@username) and keyword queries.
+    For keyword queries, uses Google search to discover relevant Instagram handles.
+    """
     from src.db.models import Creator
     from src.ingestion.social_media import scrape_instagram_profile, normalize_social_content
 
-    handle = query.lstrip("@").split("/")[-1]
+    # Determine handles to scrape
+    if query.startswith("@") or "/" in query:
+        handles = [query.lstrip("@").split("/")[-1]]
+    else:
+        # Check DB first for keyword queries
+        if not force_live:
+            existing = db.query(Creator).filter(
+                Creator.platform == "instagram",
+                (Creator.name.ilike(f"%{query}%")) | (Creator.bio.ilike(f"%{query}%"))
+            ).limit(max_results).all()
+            if len(existing) >= 3:
+                logger.info(f"Returning {len(existing)} local DB hits for Instagram query '{query}'")
+                return existing
 
-    # 1. Check local DB first
-    existing = db.query(Creator).filter(
-        Creator.platform == "instagram",
-        (Creator.platform_id.ilike(handle)) | (Creator.name.ilike(f"%{query}%"))
-    ).first()
+        # Discover handles from keyword query
+        from src.ingestion.web_discovery import discover_instagram_handles
+        handles = discover_instagram_handles(query, max_results=max_results)
+        if not handles:
+            handles = [query.lstrip("@").split("/")[-1]]
 
-    if existing and not force_live:
-        logger.info(f"Returning local DB hit for Instagram handle '{handle}'")
-        return [existing]
-
-    # 2. Live search
-    profile = scrape_instagram_profile(handle)
-
-    if not profile:
-        return []
-
-    creator = upsert_creator(db, {
-        "name": profile.get("name", handle),
-        "platform": "instagram",
-        "platform_id": handle,
-        "profile_url": profile.get("profile_url", ""),
-        "bio": profile.get("bio", ""),
-        "follower_count": profile.get("follower_count", 0),
-    })
-
-    content_items = normalize_social_content(profile)
-    for item in content_items:
-        item["creator_id"] = creator.id
-        upsert_content_item(db, item)
-
-    # LLM alignment scoring against Instagram posts
-    alignment_score = 0.0
-    post_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
-    if post_texts:
+    all_creators = []
+    for handle in handles:
         try:
-            from src.analysis.nlp import score_text_content
-            align_result = score_text_content(post_texts, target_topic=query)
-            alignment_score = float(align_result.alignment_score)
+            existing = db.query(Creator).filter(
+                Creator.platform == "instagram",
+                Creator.platform_id.ilike(handle)
+            ).first()
+
+            if existing and not force_live:
+                all_creators.append(existing)
+                continue
+
+            profile = scrape_instagram_profile(handle)
+            if not profile:
+                continue
+
+            creator = upsert_creator(db, {
+                "name": profile.get("name", handle),
+                "platform": "instagram",
+                "platform_id": handle,
+                "profile_url": profile.get("profile_url", ""),
+                "bio": profile.get("bio", ""),
+                "follower_count": profile.get("follower_count", 0),
+            })
+
+            content_items = normalize_social_content(profile)
+            for item in content_items:
+                item["creator_id"] = creator.id
+                upsert_content_item(db, item)
+
+            # LLM alignment scoring
+            alignment_score = 0.0
+            post_texts = [item.get("text_content", "") for item in content_items if item.get("text_content")]
+            if post_texts:
+                try:
+                    from src.analysis.nlp import score_text_content
+                    align_result = score_text_content(post_texts, target_topic=query)
+                    alignment_score = float(align_result.alignment_score)
+                except Exception as e:
+                    logger.error("Instagram alignment scoring failed for %s: %s", handle, e)
+
+            from src.analysis.scoring import score_creator
+            breakdown = score_creator(
+                platform="instagram",
+                bio=creator.bio or "",
+                follower_count=profile.get("follower_count", 0),
+                alignment_score=alignment_score,
+            )
+            update_creator_scores(
+                db, creator.id,
+                credibility_score=breakdown.credibility_score,
+                engagement_score=breakdown.engagement_score,
+                reach_score=breakdown.reach_score,
+                alignment_score=alignment_score,
+                composite_score=breakdown.composite_score,
+            )
+
+            all_creators.append(creator)
+
+            if len(all_creators) >= max_results:
+                break
         except Exception as e:
-            logger.error("Instagram alignment scoring failed: %s", e)
+            logger.error("Instagram scraping failed for %s: %s", handle, e)
+            continue
 
-    from src.analysis.scoring import score_creator
-    breakdown = score_creator(
-        platform="instagram",
-        bio=creator.bio or "",
-        follower_count=profile.get("follower_count", 0),
-        alignment_score=alignment_score,
-    )
-    update_creator_scores(
-        db, creator.id,
-        credibility_score=breakdown.credibility_score,
-        engagement_score=breakdown.engagement_score,
-        reach_score=breakdown.reach_score,
-        alignment_score=alignment_score,
-        composite_score=breakdown.composite_score,
-    )
-
-    return [creator]
+    return all_creators
 
 
 def _get_youtube_creators(db: Session, query: str, max_results: int, force_live: bool = False) -> tuple[list[Creator], bool]:

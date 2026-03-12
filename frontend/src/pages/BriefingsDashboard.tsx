@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { Loader2, Bot, ArrowLeft } from 'lucide-react';
 import { apiClient, type BriefingResponse } from '../api/client';
+import ReactMarkdown from 'react-markdown';
 
 export default function BriefingsDashboard() {
     const { creatorId } = useParams<{ creatorId: string }>();
@@ -45,7 +46,6 @@ export default function BriefingsDashboard() {
 
         async function pollStatus() {
             try {
-                // Assert briefingId is not null for TS
                 const currentId = briefingId as string;
                 const statusRes = await apiClient.getBriefingStatus(currentId);
                 
@@ -62,11 +62,9 @@ export default function BriefingsDashboard() {
                 }
             } catch (err) {
                 console.error(err);
-                // Keep polling on transient errors, don't crash the loop
             }
         }
 
-        // Poll immediately, then every 3s
         pollStatus();
         pinger = setInterval(pollStatus, 3000);
 
@@ -101,12 +99,89 @@ export default function BriefingsDashboard() {
             );
         }
 
-        // Completed! Show the text block.
+        // Completed! Render the Markdown beautifully.
         return (
-            <div className="bg-[#0B101E]/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-8 shadow-2xl relative z-10 text-slate-300">
-                <div className="prose prose-invert prose-cyan max-w-none">
-                    {/* Fallback rendering of raw markdown string logic */}
-                    <div className="whitespace-pre-wrap font-mono text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: briefing.content.replace(/\ng/, '<br/>') }} />
+            <div className="bg-[#0B101E]/80 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-8 md:p-10 shadow-2xl relative z-10">
+                <div className="briefing-content">
+                    <ReactMarkdown
+                        components={{
+                            h1: ({ children }) => (
+                                <h1 className="text-2xl font-bold text-white mb-4 pb-3 border-b border-slate-700/50">{children}</h1>
+                            ),
+                            h2: ({ children }) => (
+                                <h2 className="text-xl font-semibold text-white mt-8 mb-3 pb-2 border-b border-slate-800/50">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                                <h3 className="text-lg font-semibold text-cyan-300 mt-6 mb-3 flex items-center gap-2">{children}</h3>
+                            ),
+                            h4: ({ children }) => (
+                                <h4 className="text-base font-semibold text-slate-200 mt-4 mb-2">{children}</h4>
+                            ),
+                            p: ({ children }) => (
+                                <p className="text-slate-300 leading-relaxed mb-4 text-[15px]">{children}</p>
+                            ),
+                            ul: ({ children }) => (
+                                <ul className="space-y-2 mb-5 ml-1">{children}</ul>
+                            ),
+                            ol: ({ children }) => (
+                                <ol className="space-y-2 mb-5 ml-1 list-decimal list-inside">{children}</ol>
+                            ),
+                            li: ({ children }) => (
+                                <li className="text-slate-300 text-[15px] leading-relaxed flex items-start gap-2">
+                                    <span className="text-cyan-500 mt-1.5 shrink-0">•</span>
+                                    <span>{children}</span>
+                                </li>
+                            ),
+                            blockquote: ({ children }) => (
+                                <blockquote className="border-l-3 border-cyan-500/50 bg-cyan-500/5 rounded-r-lg pl-4 pr-3 py-3 my-4 italic text-slate-400 text-[14px]">
+                                    {children}
+                                </blockquote>
+                            ),
+                            strong: ({ children }) => (
+                                <strong className="text-white font-semibold">{children}</strong>
+                            ),
+                            em: ({ children }) => (
+                                <em className="text-slate-300 italic">{children}</em>
+                            ),
+                            hr: () => (
+                                <hr className="border-slate-700/40 my-6" />
+                            ),
+                            table: ({ children }) => (
+                                <div className="overflow-x-auto my-4">
+                                    <table className="w-full text-sm text-left text-slate-300 border border-slate-700/40 rounded-lg overflow-hidden">
+                                        {children}
+                                    </table>
+                                </div>
+                            ),
+                            thead: ({ children }) => (
+                                <thead className="bg-slate-800/60 text-slate-200 text-xs uppercase tracking-wider">
+                                    {children}
+                                </thead>
+                            ),
+                            tbody: ({ children }) => (
+                                <tbody className="divide-y divide-slate-700/30">{children}</tbody>
+                            ),
+                            tr: ({ children }) => (
+                                <tr className="hover:bg-slate-800/30 transition-colors">{children}</tr>
+                            ),
+                            th: ({ children }) => (
+                                <th className="px-4 py-3 font-semibold">{children}</th>
+                            ),
+                            td: ({ children }) => (
+                                <td className="px-4 py-3">{children}</td>
+                            ),
+                            a: ({ href, children }) => (
+                                <a href={href} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300 underline underline-offset-2 transition-colors">
+                                    {children}
+                                </a>
+                            ),
+                            code: ({ children }) => (
+                                <code className="bg-slate-800 text-cyan-300 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                            ),
+                        }}
+                    >
+                        {briefing.content}
+                    </ReactMarkdown>
                 </div>
             </div>
         );
